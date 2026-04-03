@@ -12,9 +12,13 @@ app.use(express.json());
 // Routes
 const authRoutes = require('./routes/auth');
 const studentRoutes = require('./routes/student');
+const teacherAuthRoutes = require('./routes/teacherAuth');
+const teacherRoutes = require('./routes/teacher');
 
 app.use('/api/student/auth', authRoutes);
 app.use('/api/student', studentRoutes);
+app.use('/api/teacher/auth', teacherAuthRoutes);
+app.use('/api/teacher', teacherRoutes);
 
 // Test Route
 app.get('/', (req, res) => {

@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const Teacher = require('../models/Teacher');
 const Student = require('../models/Student');
 
 exports.protect = async (req, res, next) => {
@@ -19,7 +20,11 @@ exports.protect = async (req, res, next) => {
     // Tokeni onayla
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    req.user = await Student.findById(decoded.id);
+    if (decoded.role === 'teacher') {
+      req.user = await Teacher.findById(decoded.id);
+    } else {
+      req.user = await Student.findById(decoded.id);
+    }
 
     if (!req.user) {
        return res.status(401).json({ success: false, message: 'Bu tokena ait kullanıcı bulunamadı' });
