@@ -68,3 +68,47 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server Hatası', error: error.message });
   }
 };
+
+// @desc    Müəllimin öz kurslarına qeydiyyatdan keçmiş tələbələrin siyahısını gətir
+// @route   GET /api/teacher/students
+// @access  Private (Teacher)
+exports.getTeacherStudents = async (req, res) => {
+  try {
+    // 1. Müəllimin idarə etdiyi kursları tap
+    const myCourses = await Course.find({ instructor: req.user.id });
+    const myCourseIds = myCourses.map(course => course._id.toString());
+    
+    // 2. Tələbələri tap ki, onların activeCourses listində yuxarıdakı ID-lərdən biri olsun
+    // Hazırda backend-də enrollment sistemi yoxdur, amma activeCourses Array olaraq saxlanılır.
+    const Student = require('../models/Student');
+    const students = await Student.find({ activeCourses: { $in: myCourseIds } });
+
+    // 3. Frontend-in gözlədiyi sadə JSON formatına çevir
+    const formattedStudents = [];
+    
+    students.forEach(student => {
+       student.activeCourses.forEach(courseId => {
+          if(myCourseIds.includes(courseId)) {
+             const matchedCourse = myCourses.find(c => c._id.toString() === courseId);
+             formattedStudents.push({
+               id: student._id + '-' + courseId, // Unique for list key
+               name: student.name + ' ' + student.surname,
+               email: student.email,
+               phone: student.phoneNumber,
+               course: matchedCourse ? matchedCourse.title : 'Naməlum Kurs',
+               date: new Date(student.createdAt).toLocaleDateString('az-AZ')
+             });
+          }
+       });
+    });
+
+    res.status(200).json({
+      success: true,
+      data: formattedStudents
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Hatası', error: error.message });
+  }
+};
