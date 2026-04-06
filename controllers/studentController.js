@@ -6,7 +6,7 @@ const Student = require('../models/Student');
 exports.getMe = async (req, res) => {
   try {
     // req.user auth middleware icinden gelir
-    const student = await Student.findById(req.user.id);
+    const student = await Student.findById(req.user.id).populate('activeCourses');
 
     res.status(200).json({
       success: true,
@@ -18,6 +18,7 @@ exports.getMe = async (req, res) => {
         phoneNumber: student.phoneNumber,
         completedTests: student.completedTests,
         certificates: student.certificates,
+        activeCourses: student.activeCourses,
         stats: {
           activeCoursesCount: student.activeCourses.length,
           completedTestsCount: student.completedTests.length,

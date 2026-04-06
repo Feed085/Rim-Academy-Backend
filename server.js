@@ -16,6 +16,7 @@ const teacherAuthRoutes = require('./routes/teacherAuth');
 const teacherRoutes = require('./routes/teacher');
 const courseRoutes = require('./routes/course');
 const uploadRoutes = require('./routes/upload');
+const testRoutes = require('./routes/test');
 
 app.use('/api/student/auth', authRoutes);
 app.use('/api/student', studentRoutes);
@@ -23,6 +24,7 @@ app.use('/api/teacher/auth', teacherAuthRoutes);
 app.use('/api/teacher', teacherRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/tests', testRoutes);
 
 // Test Route
 app.get('/', (req, res) => {

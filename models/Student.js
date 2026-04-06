@@ -29,10 +29,10 @@ const StudentSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Telefon numarası alanı zorunludur']
   },
-  activeCourses: {
-    type: Array,
-    default: []
-  },
+  activeCourses: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course'
+  }],
   completedTests: {
     type: Array,
     default: []

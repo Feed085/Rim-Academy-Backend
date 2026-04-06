@@ -1,5 +1,6 @@
 const Teacher = require('../models/Teacher');
-const Course = require('../models/Course'); // Öğrenci sayısını vs hesaplamak için kullanılabilir
+const Course = require('../models/Course');
+const Test = require('../models/Test');
 
 // @desc    Giriş yapan öğretmenin bilgilerini getir
 // @route   GET /api/teacher/me
@@ -12,18 +13,33 @@ exports.getMe = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Öğretmen bulunamadı' });
     }
 
-    // Toplam öğrenci sayısını hesaplama vs.. (kurslara kayıtlı öğrenciler üzerinden de olabilir)
-    // Şimdilik düz mantık, ileride kurs modelinden students array count toplanabilir.
+    // 1. Dinamik Test sayı
+    const testCount = await Test.countDocuments({ instructor: req.user.id });
     
+    // 2. Dinamik Tələbə sayı
+    const myCourses = await Course.find({ instructor: req.user.id });
+    const myCourseIds = myCourses.map(c => c._id);
+    const Student = require('../models/Student');
+    const studentCount = await Student.countDocuments({ activeCourses: { $in: myCourseIds } });
+    
+    // 3. Dinamik Video sayı
+    let videoCount = 0;
+    myCourses.forEach(course => {
+      if(course.modules) {
+        course.modules.forEach(module => {
+           if(module.videos) videoCount += module.videos.length;
+        });
+      }
+    });
+
     res.status(200).json({
       success: true,
       data: teacher,
-      // Frontend mockları için istatistikleri doğrudan birleştirebiliriz
       stats: {
-        studentCount: 0, // İleride course students array'i üzerinden toplanacak
+        studentCount: studentCount,
         courseCount: teacher.courses ? teacher.courses.length : 0,
-        testCount: 0, // İleride eklenecek
-        videoCount: 0, // İleride eklenecek
+        testCount: testCount,
+        videoCount: videoCount,
         rating: teacher.rating
       }
     });
@@ -87,11 +103,12 @@ exports.getTeacherStudents = async (req, res) => {
     const formattedStudents = [];
     
     students.forEach(student => {
-       student.activeCourses.forEach(courseId => {
-          if(myCourseIds.includes(courseId)) {
-             const matchedCourse = myCourses.find(c => c._id.toString() === courseId);
+       student.activeCourses.forEach(courseIdObj => {
+          const courseIdStr = courseIdObj.toString();
+          if(myCourseIds.includes(courseIdStr)) {
+             const matchedCourse = myCourses.find(c => c._id.toString() === courseIdStr);
              formattedStudents.push({
-               id: student._id + '-' + courseId, // Unique for list key
+               id: student._id + '-' + courseIdStr, // Unique for list key
                name: student.name + ' ' + student.surname,
                email: student.email,
                phone: student.phoneNumber,
