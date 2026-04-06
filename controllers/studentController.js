@@ -25,6 +25,8 @@ exports.getMe = async (req, res) => {
         surname: student.surname,
         email: student.email,
         phoneNumber: student.phoneNumber,
+        avatar: student.avatar,
+        educationLevel: student.educationLevel,
         completedTests: [], // Artıq sınaqlar TestResult-dan gəlir
         certificates: [],
         activeCourses: student.activeCourses,
@@ -37,5 +39,37 @@ exports.getMe = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Sunucu hatası', error: error.message });
+  }
+};
+
+// @desc    Giriş etmiş tələbənin profilini yenilə
+// @route   PUT /api/student/me
+// @access  Private
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, surname, phoneNumber, avatar, educationLevel } = req.body;
+    
+    // Yalnız bu sahələrin yenilənməsinə icazə veririk
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (surname) updateData.surname = surname;
+    if (phoneNumber) updateData.phoneNumber = phoneNumber;
+    if (avatar) updateData.avatar = avatar;
+    if (educationLevel !== undefined) updateData.educationLevel = educationLevel;
+
+    const student = await Student.findByIdAndUpdate(
+      req.user.id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Profil uğurla yeniləndi',
+      data: student
+    });
+  } catch (error) {
+    console.error('Update Profile xətası:', error);
+    res.status(500).json({ success: false, message: 'Server xətası', error: error.message });
   }
 };

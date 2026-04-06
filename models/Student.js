@@ -29,6 +29,14 @@ const StudentSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Telefon numarası alanı zorunludur']
   },
+  avatar: {
+    type: String,
+    default: ''
+  },
+  educationLevel: {
+    type: String, // 'Orta', 'Bakalavr', 'Magistr' vs.
+    default: ''
+  },
   activeCourses: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course'
