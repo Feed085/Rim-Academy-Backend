@@ -174,7 +174,18 @@ exports.evaluateOpenEnded = async (req, res) => {
 exports.getMyTestResults = async (req, res) => {
   try {
     const results = await TestResult.find({ student: req.user.id })
-       .populate('test', 'title course duration');
+       .populate({
+         path: 'test',
+         select: 'title course duration',
+         populate: {
+           path: 'course',
+           select: 'title instructor',
+           populate: {
+             path: 'instructor',
+             select: 'name surname'
+           }
+         }
+       });
     
     res.status(200).json({
       success: true,

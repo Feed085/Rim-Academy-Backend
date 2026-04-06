@@ -129,3 +129,37 @@ exports.getTeacherStudents = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server Hatası', error: error.message });
   }
 };
+
+// @desc    Giriş etmədən bir müəllimin informasiyasını göstərir
+// @route   GET /api/teacher/public/:id
+// @access  Public
+exports.getPublicTeacher = async (req, res) => {
+  try {
+    const teacher = await Teacher.findById(req.params.id)
+       .select('-password -email -phoneNumber'); // Həssas məlumatlar gizlədilir
+       
+    if(!teacher) {
+       return res.status(404).json({ success: false, message: 'Müəllim tapılmadı' });
+    }
+
+    const testCount = await Test.countDocuments({ instructor: teacher._id });
+    const myCourses = await Course.find({ instructor: teacher._id });
+    const myCourseIds = myCourses.map(c => c._id);
+    const Student = require('../models/Student');
+    const studentCount = await Student.countDocuments({ activeCourses: { $in: myCourseIds } });
+    
+    res.status(200).json({
+       success: true,
+       data: teacher,
+       courses: myCourses,
+       stats: {
+          courseCount: myCourses.length,
+          studentCount: studentCount,
+          testCount: testCount
+       }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server Hatası', error: error.message });
+  }
+};

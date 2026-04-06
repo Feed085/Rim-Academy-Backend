@@ -1,4 +1,5 @@
 const Student = require('../models/Student');
+const TestResult = require('../models/TestResult');
 
 // @desc    Giriş yapmış öğrencinin kendi profili ve istatistiklerini getir
 // @route   GET /api/student/me
@@ -8,6 +9,14 @@ exports.getMe = async (req, res) => {
     // req.user auth middleware icinden gelir
     const student = await Student.findById(req.user.id).populate('activeCourses');
 
+    // Dinamik sınaq nəticələrinə baxaq
+    const testResults = await TestResult.countDocuments({ student: student._id });
+    const certificatesCount = await TestResult.countDocuments({ 
+       student: student._id, 
+       scorePercentage: { $gte: 50 },
+       hasPendingAnswers: false 
+    });
+
     res.status(200).json({
       success: true,
       data: {
@@ -16,13 +25,13 @@ exports.getMe = async (req, res) => {
         surname: student.surname,
         email: student.email,
         phoneNumber: student.phoneNumber,
-        completedTests: student.completedTests,
-        certificates: student.certificates,
+        completedTests: [], // Artıq sınaqlar TestResult-dan gəlir
+        certificates: [],
         activeCourses: student.activeCourses,
         stats: {
-          activeCoursesCount: student.activeCourses.length,
-          completedTestsCount: student.completedTests.length,
-          certificatesCount: student.certificates.length
+          activeCoursesCount: student.activeCourses ? student.activeCourses.length : 0,
+          completedTestsCount: testResults,
+          certificatesCount: certificatesCount
         }
       }
     });
