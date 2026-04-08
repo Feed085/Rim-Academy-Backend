@@ -80,7 +80,7 @@ const TeacherSchema = new mongoose.Schema({
 // Kaydetmeden önce şifreyi şifrele
 TeacherSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
-    next();
+    return next();
   }
 
   const salt = await bcrypt.genSalt(10);
