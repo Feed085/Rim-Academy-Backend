@@ -15,9 +15,15 @@ const ReviewSchema = new mongoose.Schema({
   },
   comment: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
+    maxlength: [500, 'Rəy mətni maksimum 500 simvol ola bilər']
   },
   createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }

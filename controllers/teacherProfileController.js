@@ -3,6 +3,23 @@ const Course = require('../models/Course');
 const Test = require('../models/Test');
 const Student = require('../models/Student');
 
+const calculateReviewStats = (courses = []) => {
+  const reviews = courses.reduce((allReviews, course) => {
+    const courseReviews = Array.isArray(course.reviews) ? course.reviews : [];
+    return [...allReviews, ...courseReviews];
+  }, []);
+
+  if (reviews.length === 0) {
+    return { rating: 0, reviewCount: 0 };
+  }
+
+  const totalRating = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+  return {
+    rating: Math.round((totalRating / reviews.length) * 10) / 10,
+    reviewCount: reviews.length
+  };
+};
+
 const parseExperience = (value) => {
   const experience = Number(value);
   return Number.isFinite(experience) ? experience : 0;
@@ -27,6 +44,7 @@ const toPlainSocialLinks = (socialNetworks) => {
 const formatPublicTeacher = (teacher, stats = {}) => {
   const specialties = teacher.specializedAreas || [];
   const bio = teacher.bio || teacher.education || teacher.location || specialties.slice(0, 3).join(', ');
+  const rating = stats.rating ?? teacher.rating ?? 0;
 
   return {
     id: teacher._id,
@@ -34,7 +52,7 @@ const formatPublicTeacher = (teacher, stats = {}) => {
     surname: teacher.surname,
     avatar: teacher.avatar,
     categories: teacher.categories || [],
-    rating: teacher.rating || 0,
+    rating,
     education: teacher.education || '',
     experience: parseExperience(teacher.experience),
     location: teacher.location || '',
@@ -45,6 +63,7 @@ const formatPublicTeacher = (teacher, stats = {}) => {
     studentCount: stats.studentCount ?? 0,
     courseCount: stats.courseCount ?? (teacher.courses ? teacher.courses.length : 0),
     testCount: stats.testCount ?? 0,
+    reviewCount: stats.reviewCount ?? 0,
     createdAt: teacher.createdAt
   };
 };
@@ -79,6 +98,8 @@ exports.getMe = async (req, res) => {
       }
     });
 
+    const reviewStats = calculateReviewStats(myCourses);
+
     res.status(200).json({
       success: true,
       data: teacher,
@@ -87,7 +108,8 @@ exports.getMe = async (req, res) => {
         courseCount: teacher.courses ? teacher.courses.length : 0,
         testCount: testCount,
         videoCount: videoCount,
-        rating: teacher.rating
+        rating: reviewStats.rating,
+        reviewCount: reviewStats.reviewCount
       }
     });
 
@@ -101,21 +123,36 @@ exports.getMe = async (req, res) => {
 // @access  Public
 exports.getPublicTeachers = async (req, res) => {
   try {
-    const teachers = await Teacher.find().sort({ rating: -1, createdAt: -1 });
+    const teachers = await Teacher.find().sort({ createdAt: -1 });
 
     const publicTeachers = await Promise.all(teachers.map(async (teacher) => {
       const courseIds = teacher.courses || [];
-      const [studentCount, testCount] = await Promise.all([
+      const [studentCount, testCount, myCourses] = await Promise.all([
         Student.countDocuments({ activeCourses: { $in: courseIds } }),
-        Test.countDocuments({ instructor: teacher._id })
+        Test.countDocuments({ instructor: teacher._id }),
+        Course.find({ instructor: teacher._id })
       ]);
+
+      const reviewStats = calculateReviewStats(myCourses);
 
       return formatPublicTeacher(teacher, {
         courseCount: courseIds.length,
         studentCount,
-        testCount
+        testCount,
+        rating: reviewStats.rating,
+        reviewCount: reviewStats.reviewCount
       });
     }));
+
+    publicTeachers.sort((left, right) => {
+      const ratingDiff = (right.rating || 0) - (left.rating || 0);
+
+      if (ratingDiff !== 0) {
+        return ratingDiff;
+      }
+
+      return new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime();
+    });
 
     res.status(200).json({
       success: true,
@@ -224,19 +261,24 @@ exports.getPublicTeacher = async (req, res) => {
     const myCourses = await Course.find({ instructor: teacher._id });
     const myCourseIds = myCourses.map(c => c._id);
     const studentCount = await Student.countDocuments({ activeCourses: { $in: myCourseIds } });
+    const reviewStats = calculateReviewStats(myCourses);
     
     res.status(200).json({
        success: true,
        data: formatPublicTeacher(teacher, {
          courseCount: myCourses.length,
          studentCount,
-         testCount
+         testCount,
+         rating: reviewStats.rating,
+         reviewCount: reviewStats.reviewCount
        }),
        courses: myCourses,
        stats: {
           courseCount: myCourses.length,
           studentCount: studentCount,
-          testCount: testCount
+          testCount: testCount,
+          rating: reviewStats.rating,
+          reviewCount: reviewStats.reviewCount
        }
     });
 

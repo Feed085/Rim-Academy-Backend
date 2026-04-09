@@ -1,5 +1,17 @@
 const Course = require('../models/Course');
 const Teacher = require('../models/Teacher');
+const Student = require('../models/Student');
+
+const MAX_REVIEW_LENGTH = 500;
+
+const calculateAverageRating = (reviews = []) => {
+  if (!reviews.length) {
+    return 0;
+  }
+
+  const total = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+  return Math.round((total / reviews.length) * 10) / 10;
+};
 
 // @desc    Yeni kurs yarat
 // @route   POST /api/courses
@@ -9,7 +21,8 @@ exports.createCourse = async (req, res) => {
     // 1 günlük cooldown publishDate model tərəfindən default olaraq eklənəcək
     const course = await Course.create({
       ...req.body,
-      instructor: req.user.id
+      instructor: req.user.id,
+      updatedAt: new Date()
     });
 
     // Müəllimin arxivinə kursu əlavə edirik
@@ -77,9 +90,14 @@ exports.getCourse = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Kursa rast gəlinmədi' });
     }
 
+    const studentCount = await Student.countDocuments({ activeCourses: course._id });
+
     res.status(200).json({
       success: true,
-      data: course
+      data: {
+        ...course.toObject(),
+        studentCount
+      }
     });
   } catch (error) {
     if (error.name === 'CastError') {
@@ -107,7 +125,10 @@ exports.updateCourse = async (req, res) => {
 
     course = await Course.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      {
+        ...req.body,
+        updatedAt: new Date()
+      },
       { new: true, runValidators: true }
     );
 
@@ -120,5 +141,88 @@ exports.updateCourse = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Yanlış Kurs ID formatı' });
     }
     res.status(500).json({ success: false, message: 'Server xətası' });
+  }
+};
+
+// @desc    Kursa rəy əlavə et və ya mövcud rəyi yenilə
+// @route   POST /api/courses/:id/reviews
+// @access  Private (Student)
+exports.addReview = async (req, res) => {
+  try {
+    if (req.user?.constructor?.modelName !== 'Student') {
+      return res.status(403).json({ success: false, message: 'Yalnız tələbələr rəy yaza bilər' });
+    }
+
+    const { rating, comment } = req.body;
+    const normalizedRating = Number(rating);
+    const trimmedComment = typeof comment === 'string' ? comment.trim() : '';
+
+    if (!Number.isFinite(normalizedRating) || normalizedRating < 1 || normalizedRating > 5) {
+      return res.status(400).json({ success: false, message: 'Reytinq 1 ilə 5 arasında olmalıdır' });
+    }
+
+    if (!trimmedComment) {
+      return res.status(400).json({ success: false, message: 'Rəy mətni boş ola bilməz' });
+    }
+
+    if (trimmedComment.length > MAX_REVIEW_LENGTH) {
+      return res.status(400).json({ success: false, message: `Rəy maksimum ${MAX_REVIEW_LENGTH} simvol ola bilər` });
+    }
+
+    const [course, student] = await Promise.all([
+      Course.findById(req.params.id),
+      Student.findById(req.user.id).select('name surname avatar activeCourses')
+    ]);
+
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Kursa rast gəlinmədi' });
+    }
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Tələbə tapılmadı' });
+    }
+
+    const isEnrolled = (student.activeCourses || []).some((courseId) => courseId.toString() === course._id.toString());
+
+    if (!isEnrolled) {
+      return res.status(403).json({ success: false, message: 'Yalnız qeydiyyatdan keçmiş tələbələr rəy yaza bilər' });
+    }
+
+    course.reviews = course.reviews || [];
+    const existingReviewIndex = course.reviews.findIndex((review) => review.user && review.user.toString() === req.user.id);
+
+    const reviewPayload = {
+      user: student._id,
+      name: `${student.name} ${student.surname}`.trim(),
+      rating: normalizedRating,
+      comment: trimmedComment,
+      createdAt: new Date()
+    };
+
+    if (existingReviewIndex >= 0) {
+      course.reviews.splice(existingReviewIndex, 1, reviewPayload);
+    } else {
+      course.reviews.push(reviewPayload);
+    }
+
+    course.rating = calculateAverageRating(course.reviews);
+    course.updatedAt = new Date();
+    await course.save();
+
+    const updatedCourse = await Course.findById(course._id)
+      .populate('instructor', 'name surname avatar experience specializedAreas socialNetworks')
+      .populate('reviews.user', 'name surname avatar');
+    const studentCount = await Student.countDocuments({ activeCourses: course._id });
+
+    const updatedCourseData = updatedCourse.toObject();
+    updatedCourseData.studentCount = studentCount;
+
+    res.status(existingReviewIndex >= 0 ? 200 : 201).json({
+      success: true,
+      message: existingReviewIndex >= 0 ? 'Rəyiniz yeniləndi' : 'Rəyiniz əlavə olundu',
+      data: updatedCourseData
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Rəy əlavə olunmadı', error: error.message });
   }
 };
