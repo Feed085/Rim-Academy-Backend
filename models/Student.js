@@ -1,6 +1,22 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+const CourseProgressSchema = new mongoose.Schema({
+  course: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course',
+    required: true
+  },
+  completedLessonIds: {
+    type: [String],
+    default: []
+  },
+  lastAccessed: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false });
+
 const StudentSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -41,6 +57,10 @@ const StudentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course'
   }],
+  courseProgress: {
+    type: [CourseProgressSchema],
+    default: []
+  },
   assignedTests: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Test'

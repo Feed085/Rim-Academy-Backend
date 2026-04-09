@@ -17,7 +17,16 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/rim-academy
       process.exit(0);
    }
 
-   await Student.updateMany({}, { $set: { activeCourses: courseIds } });
+    await Student.updateMany({}, {
+         $set: {
+            activeCourses: courseIds,
+            courseProgress: courseIds.map(courseId => ({
+               course: courseId,
+               completedLessonIds: [],
+               lastAccessed: new Date()
+            }))
+         }
+    });
    
    console.log('Bütün tələbə hesablarına mövcud olan bütün kurslar (test üçün) verildi!');
    process.exit(0);

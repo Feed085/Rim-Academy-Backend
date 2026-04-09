@@ -1,5 +1,37 @@
 const Student = require('../models/Student');
+const Course = require('../models/Course');
 const TestResult = require('../models/TestResult');
+
+const flattenCourseLessons = (course) => {
+  return (course.modules || []).reduce((lessons, module) => {
+    const moduleLessons = (module.videos || []).map((video) => {
+      const lesson = typeof video.toObject === 'function' ? video.toObject() : video;
+
+      return {
+        ...lesson,
+        moduleTitle: module.title
+      };
+    });
+
+    return [...lessons, ...moduleLessons];
+  }, []);
+};
+
+const buildCourseProgressSummary = (course, progressEntry) => {
+  const lessons = flattenCourseLessons(course);
+  const completedLessons = progressEntry?.completedLessonIds?.length || 0;
+  const totalLessons = lessons.length;
+  const progress = totalLessons > 0
+    ? Math.round((completedLessons / totalLessons) * 100)
+    : 0;
+
+  return {
+    progress,
+    completedLessons,
+    totalLessons,
+    lastAccessed: progressEntry?.lastAccessed || null
+  };
+};
 
 // @desc    Giriş yapmış öğrencinin kendi profili ve istatistiklerini getir
 // @route   GET /api/student/me
@@ -8,6 +40,24 @@ exports.getMe = async (req, res) => {
   try {
     // req.user auth middleware icinden gelir
     const student = await Student.findById(req.user.id).populate('activeCourses');
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Tələbə tapılmadı' });
+    }
+
+    const progressMap = new Map(
+      (student.courseProgress || []).map((entry) => [entry.course.toString(), entry])
+    );
+
+    const activeCourses = (student.activeCourses || []).map((course) => {
+      const courseData = typeof course.toObject === 'function' ? course.toObject() : course;
+      const progressEntry = progressMap.get(courseData._id.toString());
+
+      return {
+        ...courseData,
+        ...buildCourseProgressSummary(courseData, progressEntry)
+      };
+    });
 
     // Dinamik sınaq nəticələrinə baxaq
     const testResults = await TestResult.countDocuments({ student: student._id });
@@ -29,7 +79,7 @@ exports.getMe = async (req, res) => {
         educationLevel: student.educationLevel,
         completedTests: [], // Artıq sınaqlar TestResult-dan gəlir
         certificates: [],
-        activeCourses: student.activeCourses,
+        activeCourses,
         stats: {
           activeCoursesCount: student.activeCourses ? student.activeCourses.length : 0,
           completedTestsCount: testResults,
@@ -39,6 +89,89 @@ exports.getMe = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Sunucu hatası', error: error.message });
+  }
+};
+
+// @desc    Video tamamlanmasını qeyd et və kurs irəliləyişini yenilə
+// @route   POST /api/student/progress
+// @access  Private (Student)
+exports.markLessonCompleted = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.body;
+
+    if (!courseId || !lessonId) {
+      return res.status(400).json({ success: false, message: 'courseId və lessonId mütləqdir' });
+    }
+
+    const [student, course] = await Promise.all([
+      Student.findById(req.user.id),
+      Course.findById(courseId)
+    ]);
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Tələbə tapılmadı' });
+    }
+
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Kurs tapılmadı' });
+    }
+
+    const isEnrolled = (student.activeCourses || []).some((activeCourseId) => activeCourseId.toString() === course._id.toString());
+
+    if (!isEnrolled) {
+      return res.status(403).json({ success: false, message: 'Bu kurs üçün qeydiyyat tapılmadı' });
+    }
+
+    const lessons = flattenCourseLessons(course);
+
+    if (lessons.length === 0) {
+      return res.status(400).json({ success: false, message: 'Kursda video dərs tapılmadı' });
+    }
+
+    const normalizedLessonId = lessonId.toString();
+    const lessonIndex = lessons.findIndex((lesson) => lesson._id.toString() === normalizedLessonId);
+
+    if (lessonIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Video dərsi tapılmadı' });
+    }
+
+    student.courseProgress = student.courseProgress || [];
+    let progressEntry = student.courseProgress.find((entry) => entry.course.toString() === course._id.toString());
+
+    if (!progressEntry) {
+      progressEntry = {
+        course: course._id,
+        completedLessonIds: [],
+        lastAccessed: new Date()
+      };
+      student.courseProgress.push(progressEntry);
+    }
+
+    const completedLessonIds = progressEntry.completedLessonIds || [];
+    const alreadyCompleted = completedLessonIds.includes(normalizedLessonId);
+    const nextExpectedLesson = lessons[completedLessonIds.length];
+    const canAdvance = nextExpectedLesson && nextExpectedLesson._id.toString() === normalizedLessonId && !alreadyCompleted;
+
+    if (canAdvance) {
+      progressEntry.completedLessonIds = [...completedLessonIds, normalizedLessonId];
+      progressEntry.lastAccessed = new Date();
+      await student.save();
+    }
+
+    const summary = buildCourseProgressSummary(course, progressEntry);
+
+    res.status(200).json({
+      success: true,
+      message: canAdvance ? 'Dərs tamamlandı' : 'İrəliləyiş dəyişməyib',
+      data: {
+        courseId: course._id,
+        lessonId: normalizedLessonId,
+        updated: canAdvance,
+        ...summary
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'İrəliləyiş yenilənmədi', error: error.message });
   }
 };
 

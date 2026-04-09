@@ -344,6 +344,17 @@ exports.assignStudentItem = async (req, res) => {
       }
 
       student.activeCourses.push(course._id);
+
+      student.courseProgress = student.courseProgress || [];
+      const hasProgressEntry = student.courseProgress.some((entry) => entry.course.toString() === course._id.toString());
+
+      if (!hasProgressEntry) {
+        student.courseProgress.push({
+          course: course._id,
+          completedLessonIds: [],
+          lastAccessed: new Date()
+        });
+      }
     } else if (type === 'test') {
       const test = await Test.findById(targetId);
 
