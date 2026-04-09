@@ -1,5 +1,5 @@
 const express = require('express');
-const { getMe, updateProfile, getTeacherStudents, getPublicTeacher, getPublicTeachers } = require('../controllers/teacherProfileController');
+const { getMe, updateProfile, getTeacherStudents, getPublicTeacher, getPublicTeachers, addTeacherReview } = require('../controllers/teacherProfileController');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -16,5 +16,8 @@ router.route('/public')
 
 router.route('/public/:id')
   .get(getPublicTeacher);
+
+router.route('/public/:id/reviews')
+  .post(protect, addTeacherReview);
 
 module.exports = router;

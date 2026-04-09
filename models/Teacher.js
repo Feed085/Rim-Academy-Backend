@@ -2,6 +2,31 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+const TeacherReviewSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'Student',
+    required: true
+  },
+  name: String,
+  rating: {
+    type: Number,
+    required: true,
+    min: 1,
+    max: 5
+  },
+  comment: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: [500, 'Rəy mətni maksimum 500 simvol ola bilər']
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: true });
+
 const TeacherSchema = new mongoose.Schema({
   avatar: {
     type: String,
@@ -45,6 +70,10 @@ const TeacherSchema = new mongoose.Schema({
   rating: {
     type: Number,
     default: 0
+  },
+  reviews: {
+    type: [TeacherReviewSchema],
+    default: []
   },
   education: {
     type: String,
