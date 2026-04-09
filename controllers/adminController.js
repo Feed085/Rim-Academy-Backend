@@ -55,6 +55,11 @@ const calculateGrowthPercent = (current, previous) => {
   return Math.round(((current - previous) / previous) * 100);
 };
 
+const parseExperience = (value) => {
+  const experience = Number(value);
+  return Number.isFinite(experience) ? experience : 0;
+};
+
 const ensureCategories = async () => {
   const count = await Category.countDocuments();
 
@@ -80,7 +85,7 @@ const buildTeacherSummary = async (teacher) => {
     categories: teacher.categories || [],
     rating: teacher.rating || 0,
     education: teacher.education || '',
-    experience: teacher.experience || '',
+    experience: parseExperience(teacher.experience),
     location: teacher.location || '',
     courseCount,
     testCount,
@@ -232,7 +237,7 @@ exports.updateTeacher = async (req, res) => {
       phoneNumber: req.body.phoneNumber,
       categories: req.body.categories,
       education: req.body.education,
-      experience: req.body.experience,
+      experience: req.body.experience !== undefined ? parseExperience(req.body.experience) : undefined,
       specializedAreas: req.body.specializedAreas,
       location: req.body.location,
       avatar: req.body.avatar,

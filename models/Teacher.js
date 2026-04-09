@@ -51,8 +51,8 @@ const TeacherSchema = new mongoose.Schema({
     default: ''
   },
   experience: {
-    type: String,
-    default: ''
+    type: Number,
+    default: 0
   },
   specializedAreas: {
     type: [String],

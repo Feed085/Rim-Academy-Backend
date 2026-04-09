@@ -1,6 +1,11 @@
 const Teacher = require('../models/Teacher');
 const jwt = require('jsonwebtoken');
 
+const parseExperience = (value) => {
+  const experience = Number(value);
+  return Number.isFinite(experience) ? experience : 0;
+};
+
 // Token gönder fonksiyonu
 const sendTokenResponse = (teacher, statusCode, res) => {
   const token = teacher.getSignedJwtToken();
@@ -17,7 +22,7 @@ const sendTokenResponse = (teacher, statusCode, res) => {
       categories: teacher.categories,
       rating: teacher.rating,
       education: teacher.education,
-      experience: teacher.experience,
+      experience: parseExperience(teacher.experience),
       specializedAreas: teacher.specializedAreas,
       location: teacher.location
     }
@@ -46,7 +51,7 @@ exports.register = async (req, res) => {
       phoneNumber,
       categories,
       education,
-      experience,
+      experience: parseExperience(experience),
       specializedAreas,
       location,
       socialNetworks

@@ -1,6 +1,53 @@
 const Teacher = require('../models/Teacher');
 const Course = require('../models/Course');
 const Test = require('../models/Test');
+const Student = require('../models/Student');
+
+const parseExperience = (value) => {
+  const experience = Number(value);
+  return Number.isFinite(experience) ? experience : 0;
+};
+
+const toPlainSocialLinks = (socialNetworks) => {
+  if (!socialNetworks) {
+    return {};
+  }
+
+  if (typeof socialNetworks.toObject === 'function') {
+    return socialNetworks.toObject();
+  }
+
+  if (typeof socialNetworks.entries === 'function') {
+    return Object.fromEntries(socialNetworks.entries());
+  }
+
+  return socialNetworks;
+};
+
+const formatPublicTeacher = (teacher, stats = {}) => {
+  const specialties = teacher.specializedAreas || [];
+  const bio = teacher.bio || teacher.education || teacher.location || specialties.slice(0, 3).join(', ');
+
+  return {
+    id: teacher._id,
+    name: teacher.name,
+    surname: teacher.surname,
+    avatar: teacher.avatar,
+    categories: teacher.categories || [],
+    rating: teacher.rating || 0,
+    education: teacher.education || '',
+    experience: parseExperience(teacher.experience),
+    location: teacher.location || '',
+    bio: bio || 'Müəllim profili yenilənir.',
+    specialties,
+    specializedAreas: specialties,
+    socialLinks: toPlainSocialLinks(teacher.socialNetworks),
+    studentCount: stats.studentCount ?? 0,
+    courseCount: stats.courseCount ?? (teacher.courses ? teacher.courses.length : 0),
+    testCount: stats.testCount ?? 0,
+    createdAt: teacher.createdAt
+  };
+};
 
 // @desc    Giriş yapan öğretmenin bilgilerini getir
 // @route   GET /api/teacher/me
@@ -49,6 +96,37 @@ exports.getMe = async (req, res) => {
   }
 };
 
+// @desc    Public müəllim siyahısını gətir
+// @route   GET /api/teacher/public
+// @access  Public
+exports.getPublicTeachers = async (req, res) => {
+  try {
+    const teachers = await Teacher.find().sort({ rating: -1, createdAt: -1 });
+
+    const publicTeachers = await Promise.all(teachers.map(async (teacher) => {
+      const courseIds = teacher.courses || [];
+      const [studentCount, testCount] = await Promise.all([
+        Student.countDocuments({ activeCourses: { $in: courseIds } }),
+        Test.countDocuments({ instructor: teacher._id })
+      ]);
+
+      return formatPublicTeacher(teacher, {
+        courseCount: courseIds.length,
+        studentCount,
+        testCount
+      });
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: publicTeachers.length,
+      data: publicTeachers
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Müəllimlər alınmadı', error: error.message });
+  }
+};
+
 // @desc    Giriş yapan öğretmenin profili güncelle
 // @route   PUT /api/teacher/me
 // @access  Private (Teacher)
@@ -60,7 +138,7 @@ exports.updateProfile = async (req, res) => {
       surname: req.body.surname,
       phoneNumber: req.body.phone || req.body.phoneNumber,
       education: req.body.education,
-      experience: req.body.experience,
+      experience: req.body.experience !== undefined ? parseExperience(req.body.experience) : undefined,
       specializedAreas: req.body.specialties || req.body.specializedAreas,
       location: req.body.location,
       socialNetworks: req.body.socialLinks || req.body.socialNetworks,
@@ -145,12 +223,15 @@ exports.getPublicTeacher = async (req, res) => {
     const testCount = await Test.countDocuments({ instructor: teacher._id });
     const myCourses = await Course.find({ instructor: teacher._id });
     const myCourseIds = myCourses.map(c => c._id);
-    const Student = require('../models/Student');
     const studentCount = await Student.countDocuments({ activeCourses: { $in: myCourseIds } });
     
     res.status(200).json({
        success: true,
-       data: teacher,
+       data: formatPublicTeacher(teacher, {
+         courseCount: myCourses.length,
+         studentCount,
+         testCount
+       }),
        courses: myCourses,
        stats: {
           courseCount: myCourses.length,
