@@ -1,7 +1,9 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const path = require('path');
 const crypto = require('crypto');
+
+const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
 
 const s3Client = new S3Client({
   region: 'auto',
@@ -48,4 +50,43 @@ exports.generatePresignedUrl = async (filename, contentType, folder = 'videos') 
   const publicUrl = `${process.env.R2_PUBLIC_URL}/${uniqueName}`;
 
   return { signedUrl, publicUrl };
+};
+
+exports.extractR2KeyFromUrl = (url) => {
+  if (!url || typeof url !== 'string') {
+    return null;
+  }
+
+  const normalizedUrl = url.trim();
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  if (!R2_PUBLIC_URL || !normalizedUrl.startsWith(R2_PUBLIC_URL)) {
+    return null;
+  }
+
+  return normalizedUrl.slice(R2_PUBLIC_URL.length).replace(/^\/+/, '');
+};
+
+exports.deleteR2ObjectsByUrls = async (urls = []) => {
+  const keys = [...new Set(
+    urls
+      .map(exports.extractR2KeyFromUrl)
+      .filter(Boolean)
+  )];
+
+  if (keys.length === 0) {
+    return { deleted: 0 };
+  }
+
+  await s3Client.send(new DeleteObjectsCommand({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Delete: {
+      Objects: keys.map((key) => ({ Key: key })),
+      Quiet: true
+    }
+  }));
+
+  return { deleted: keys.length };
 };

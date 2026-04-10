@@ -2,6 +2,7 @@ const Course = require('../models/Course');
 const Teacher = require('../models/Teacher');
 const Student = require('../models/Student');
 const Test = require('../models/Test');
+const { deleteR2ObjectsByUrls } = require('../utils/s3Upload');
 
 const MAX_REVIEW_LENGTH = 500;
 
@@ -12,6 +13,32 @@ const calculateAverageRating = (reviews = []) => {
 
   const total = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
   return Math.round((total / reviews.length) * 10) / 10;
+};
+
+const collectCourseAssetUrls = (course) => {
+  const urls = [];
+
+  if (course?.image) {
+    urls.push(course.image);
+  }
+
+  const modules = Array.isArray(course?.modules) ? course.modules : [];
+
+  modules.forEach((module) => {
+    const videos = Array.isArray(module?.videos) ? module.videos : [];
+
+    videos.forEach((video) => {
+      if (video?.videoUrl) {
+        urls.push(video.videoUrl);
+      }
+
+      if (video?.thumbnail) {
+        urls.push(video.thumbnail);
+      }
+    });
+  });
+
+  return [...new Set(urls.filter(Boolean))];
 };
 
 // @desc    Yeni kurs yarat
@@ -46,8 +73,7 @@ exports.createCourse = async (req, res) => {
 exports.getCourses = async (req, res) => {
   try {
     const courses = await Course.find({
-      isActive: true,
-      publishDate: { $lte: Date.now() }
+      isActive: true
     }).populate('instructor', 'name surname avatar rating');
 
     res.status(200).json({
@@ -159,6 +185,9 @@ exports.deleteCourse = async (req, res) => {
     if (course.instructor.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Bu kursu silmək icazəniz yoxdur' });
     }
+
+    const assetUrls = collectCourseAssetUrls(course.toObject ? course.toObject() : course);
+    await deleteR2ObjectsByUrls(assetUrls);
 
     const relatedTests = await Test.find({ course: course._id }).select('_id');
     const relatedTestIds = relatedTests.map((test) => test._id);
