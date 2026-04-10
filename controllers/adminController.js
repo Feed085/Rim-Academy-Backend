@@ -2,7 +2,9 @@ const Course = require('../models/Course');
 const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 const Test = require('../models/Test');
+const TestResult = require('../models/TestResult');
 const Category = require('../models/Category');
+const { deleteR2ObjectsByUrls } = require('../utils/s3Upload');
 
 const defaultCategories = [
   { name: 'Dil Kursları', slug: 'language', color: '#00D084', icon: 'BookOpen', order: 1 },
@@ -58,6 +60,59 @@ const calculateGrowthPercent = (current, previous) => {
 const parseExperience = (value) => {
   const experience = Number(value);
   return Number.isFinite(experience) ? experience : 0;
+};
+
+const collectCourseAssetUrls = (course) => {
+  const urls = [];
+
+  if (course?.image) {
+    urls.push(course.image);
+  }
+
+  const modules = Array.isArray(course?.modules) ? course.modules : [];
+
+  modules.forEach((module) => {
+    const videos = Array.isArray(module?.videos) ? module.videos : [];
+
+    videos.forEach((video) => {
+      if (video?.videoUrl) {
+        urls.push(video.videoUrl);
+      }
+
+      if (video?.thumbnail) {
+        urls.push(video.thumbnail);
+      }
+    });
+  });
+
+  return urls;
+};
+
+const collectTestAssetUrls = (test) => {
+  const urls = [];
+  const questions = Array.isArray(test?.questions) ? test.questions : [];
+
+  questions.forEach((question) => {
+    if (typeof question?.content === 'string' && question.content.trim()) {
+      urls.push(question.content);
+    }
+  });
+
+  return urls;
+};
+
+const collectTeacherDeletionAssetUrls = (teacher, courses = [], tests = []) => {
+  const urls = [teacher?.avatar];
+
+  courses.forEach((course) => {
+    urls.push(...collectCourseAssetUrls(course));
+  });
+
+  tests.forEach((test) => {
+    urls.push(...collectTestAssetUrls(test));
+  });
+
+  return [...new Set(urls.filter(Boolean))];
 };
 
 const ensureCategories = async () => {
@@ -269,12 +324,38 @@ exports.deleteTeacher = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Müəllim tapılmadı' });
     }
 
-    await Course.updateMany(
-      { instructor: teacher._id },
-      { $set: { isActive: false } }
-    );
+    const [courses, tests] = await Promise.all([
+      Course.find({ instructor: teacher._id }).select('image modules'),
+      Test.find({ instructor: teacher._id }).select('questions')
+    ]);
 
-    await Test.deleteMany({ instructor: teacher._id });
+    const courseIds = courses.map((course) => course._id);
+    const testIds = tests.map((test) => test._id);
+    const assetUrls = collectTeacherDeletionAssetUrls(teacher, courses, tests);
+
+    const studentPullUpdate = { $pull: {} };
+
+    if (courseIds.length > 0) {
+      studentPullUpdate.$pull.activeCourses = { $in: courseIds };
+      studentPullUpdate.$pull.courseProgress = { course: { $in: courseIds } };
+    }
+
+    if (testIds.length > 0) {
+      studentPullUpdate.$pull.assignedTests = { $in: testIds };
+    }
+
+    const cleanupOperations = [
+      ...(courseIds.length > 0 ? [Course.deleteMany({ instructor: teacher._id })] : []),
+      ...(testIds.length > 0 ? [
+        TestResult.deleteMany({ test: { $in: testIds } }),
+        Test.deleteMany({ instructor: teacher._id })
+      ] : []),
+      Object.keys(studentPullUpdate.$pull).length > 0 ? Student.updateMany({}, studentPullUpdate) : Promise.resolve(),
+      deleteR2ObjectsByUrls(assetUrls)
+    ];
+
+    await Promise.all(cleanupOperations);
+
     await Teacher.findByIdAndDelete(req.params.teacherId);
 
     res.status(200).json({

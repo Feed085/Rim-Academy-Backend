@@ -89,6 +89,14 @@ const CourseSchema = new mongoose.Schema({
     default: 0
   },
   reviews: [ReviewSchema],
+  learningPoints: {
+    type: [String],
+    default: []
+  },
+  includes: {
+    type: [String],
+    default: []
+  },
   tests: [{
     type: mongoose.Schema.ObjectId,
     ref: 'Test'
