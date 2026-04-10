@@ -19,6 +19,7 @@ const uploadRoutes = require('./routes/upload');
 const testRoutes = require('./routes/test');
 const adminRoutes = require('./routes/admin');
 const categoryRoutes = require('./routes/categories');
+const publicRoutes = require('./routes/public');
 
 app.use('/api/student/auth', authRoutes);
 app.use('/api/student', studentRoutes);
@@ -29,6 +30,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/tests', testRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/public', publicRoutes);
 
 // Test Route
 app.get('/', (req, res) => {

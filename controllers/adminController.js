@@ -272,6 +272,30 @@ exports.getDashboard = async (req, res) => {
   }
 };
 
+exports.getPublicStats = async (req, res) => {
+  try {
+    const now = new Date();
+
+    const [totalStudents, totalTeachers, activeCourses] = await Promise.all([
+      Student.countDocuments(),
+      Teacher.countDocuments(),
+      Course.countDocuments({ isActive: true, publishDate: { $lte: now } })
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        students: totalStudents,
+        teachers: totalTeachers,
+        courses: activeCourses,
+        experience: 15
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'İctimai statistikalar alınmadı', error: error.message });
+  }
+};
+
 exports.getTeachers = async (req, res) => {
   try {
     const teachers = await Teacher.find().sort({ createdAt: -1 });
