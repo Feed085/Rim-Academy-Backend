@@ -5,6 +5,7 @@ const {
   getCourse,
   getTeacherCourses,
   updateCourse,
+  deleteCourse,
   addReview
 } = require('../controllers/courseController');
 const { protect } = require('../middleware/auth');
@@ -20,7 +21,8 @@ router.route('/my-courses')
 
 router.route('/:id')
   .get(getCourse) // Public: Detaylar
-  .put(protect, updateCourse); // Private: Müəllim öz kursunu güncəlləyir
+  .put(protect, updateCourse) // Private: Müəllim öz kursunu güncəlləyir
+  .delete(protect, deleteCourse); // Private: Müəllim öz kursunu silir
 
 router.route('/:id/reviews')
   .post(protect, addReview); // Private: Tələbə rəy əlavə edir

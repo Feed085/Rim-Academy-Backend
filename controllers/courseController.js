@@ -1,6 +1,7 @@
 const Course = require('../models/Course');
 const Teacher = require('../models/Teacher');
 const Student = require('../models/Student');
+const Test = require('../models/Test');
 
 const MAX_REVIEW_LENGTH = 500;
 
@@ -141,6 +142,58 @@ exports.updateCourse = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Yanlış Kurs ID formatı' });
     }
     res.status(500).json({ success: false, message: 'Server xətası' });
+  }
+};
+
+// @desc    Kursu sil
+// @route   DELETE /api/courses/:id
+// @access  Private (Teacher)
+exports.deleteCourse = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Kursa rast gəlinmədi' });
+    }
+
+    if (course.instructor.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Bu kursu silmək icazəniz yoxdur' });
+    }
+
+    const relatedTests = await Test.find({ course: course._id }).select('_id');
+    const relatedTestIds = relatedTests.map((test) => test._id);
+
+    await Promise.all([
+      Test.deleteMany({ course: course._id }),
+      Student.updateMany(
+        {
+          $or: [
+            { activeCourses: course._id },
+            { 'courseProgress.course': course._id },
+            ...(relatedTestIds.length > 0 ? [{ assignedTests: { $in: relatedTestIds } }] : [])
+          ]
+        },
+        {
+          $pull: {
+            activeCourses: course._id,
+            courseProgress: { course: course._id },
+            assignedTests: { $in: relatedTestIds }
+          }
+        }
+      ),
+      Teacher.findByIdAndUpdate(course.instructor, {
+        $pull: { courses: course._id }
+      })
+    ]);
+
+    await Course.findByIdAndDelete(course._id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Kurs silindi'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Kurs silinmədi', error: error.message });
   }
 };
 
