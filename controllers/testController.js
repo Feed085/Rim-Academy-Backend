@@ -40,6 +40,23 @@ exports.getTestsByCourse = async (req, res) => {
   }
 };
 
+// @desc    Müəllimin bütün testlərini gətir
+// @route   GET /api/tests/my
+// @access  Private (Teacher)
+exports.getMyTests = async (req, res) => {
+  try {
+    const tests = await Test.find({ instructor: req.user.id })
+      .populate('course', 'title category image instructor');
+
+    res.status(200).json({
+      success: true,
+      data: tests
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server Hatası', error: error.message });
+  }
+};
+
 // @desc    Test məlumatlarını gətir
 // @route   GET /api/tests/:id
 // @access  Private

@@ -2,6 +2,7 @@ const express = require('express');
 const {
   createTest,
   getTestsByCourse,
+  getMyTests,
   getTestById,
   submitTest,
   evaluateOpenEnded,
@@ -17,6 +18,9 @@ router.route('/')
 
 router.route('/course/:courseId')
   .get(protect, getTestsByCourse);
+
+router.route('/my')
+  .get(protect, getMyTests);
 
 router.route('/:id')
   .get(protect, getTestById);
