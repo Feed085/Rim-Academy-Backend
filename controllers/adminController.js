@@ -6,13 +6,6 @@ const TestResult = require('../models/TestResult');
 const Category = require('../models/Category');
 const { deleteR2ObjectsByUrls } = require('../utils/s3Upload');
 
-const defaultCategories = [
-  { name: 'Dil Kursları', slug: 'language', color: '#00D084', icon: 'BookOpen', order: 1 },
-  { name: 'Komputer Kursları', slug: 'computer', color: '#2563EB', icon: 'Laptop', order: 2 },
-  { name: 'Programlaşdırma Kursları', slug: 'programming', color: '#7C3AED', icon: 'Code2', order: 3 },
-  { name: 'İmtahan Hazırlığı', slug: 'exam', color: '#F97316', icon: 'GraduationCap', order: 4 }
-];
-
 const normalizeText = (value = '') => value
   .trim()
   .normalize('NFKD')
@@ -113,17 +106,6 @@ const collectTeacherDeletionAssetUrls = (teacher, courses = [], tests = []) => {
   });
 
   return [...new Set(urls.filter(Boolean))];
-};
-
-const ensureCategories = async () => {
-  const count = await Category.countDocuments();
-
-  if (count === 0) {
-    await Category.insertMany(defaultCategories.map((category) => ({
-      ...category,
-      order: category.order || 0
-    })));
-  }
 };
 
 const buildTeacherSummary = async (teacher) => {
@@ -565,7 +547,6 @@ exports.getTests = async (req, res) => {
 
 exports.getCategories = async (req, res) => {
   try {
-    await ensureCategories();
     const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
 
     res.status(200).json({
