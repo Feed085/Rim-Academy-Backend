@@ -41,14 +41,74 @@ const collectCourseAssetUrls = (course) => {
   return [...new Set(urls.filter(Boolean))];
 };
 
+const validateCourseModules = (modules) => {
+  if (!Array.isArray(modules)) {
+    return null;
+  }
+
+  for (const module of modules) {
+    const moduleTitle = typeof module?.title === 'string' ? module.title.trim() : '';
+    if (!moduleTitle) {
+      return 'Modul başlığı məcburidir';
+    }
+
+    const videos = Array.isArray(module?.videos) ? module.videos : [];
+    for (const video of videos) {
+      const videoTitle = typeof video?.title === 'string' ? video.title.trim() : '';
+      const videoUrl = typeof video?.videoUrl === 'string' ? video.videoUrl.trim() : '';
+
+      if (!videoTitle) {
+        return 'Video başlığı məcburidir';
+      }
+
+      if (!videoUrl) {
+        return 'Video URL məcburidir';
+      }
+    }
+  }
+
+  return null;
+};
+
 // @desc    Yeni kurs yarat
 // @route   POST /api/courses
 // @access  Private (Teacher)
 exports.createCourse = async (req, res) => {
   try {
+    const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
+    const category = typeof req.body.category === 'string' ? req.body.category.trim() : '';
+    const description = typeof req.body.description === 'string' ? req.body.description.trim() : '';
+    const image = typeof req.body.image === 'string' ? req.body.image.trim() : '';
+    const price = Number(req.body.price);
+
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Kurs başlığı məcburidir' });
+    }
+
+    if (!category) {
+      return res.status(400).json({ success: false, message: 'Kateqoriya məcburidir' });
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+      return res.status(400).json({ success: false, message: 'Qiymət məcburidir' });
+    }
+
+    if (!description) {
+      return res.status(400).json({ success: false, message: 'Haqqında bölməsi məcburidir' });
+    }
+
+    if (!image) {
+      return res.status(400).json({ success: false, message: 'Kover şəkli məcburidir' });
+    }
+
     // 1 günlük cooldown publishDate model tərəfindən default olaraq eklənəcək
     const course = await Course.create({
-      ...req.body,
+      title,
+      category,
+      description,
+      price,
+      image,
+      hasCertificate: Boolean(req.body.hasCertificate),
       instructor: req.user.id,
       updatedAt: new Date()
     });
@@ -150,10 +210,40 @@ exports.updateCourse = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Bu kursu dəyişmək icazəniz yoxdur' });
     }
 
+    const title = typeof req.body.title === 'string' ? req.body.title.trim() : course.title;
+    const category = typeof req.body.category === 'string' ? req.body.category.trim() : course.category;
+    const description = typeof req.body.description === 'string' ? req.body.description.trim() : course.description;
+    const image = typeof req.body.image === 'string' ? req.body.image.trim() : course.image;
+
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Kurs başlığı məcburidir' });
+    }
+
+    if (!category) {
+      return res.status(400).json({ success: false, message: 'Kateqoriya məcburidir' });
+    }
+
+    if (!description) {
+      return res.status(400).json({ success: false, message: 'Haqqında bölməsi məcburidir' });
+    }
+
+    if (!image) {
+      return res.status(400).json({ success: false, message: 'Kover şəkli məcburidir' });
+    }
+
+    const moduleValidationError = validateCourseModules(req.body.modules);
+    if (moduleValidationError) {
+      return res.status(400).json({ success: false, message: moduleValidationError });
+    }
+
     course = await Course.findByIdAndUpdate(
       req.params.id,
       {
         ...req.body,
+        title,
+        category,
+        description,
+        image,
         updatedAt: new Date()
       },
       { new: true, runValidators: true }

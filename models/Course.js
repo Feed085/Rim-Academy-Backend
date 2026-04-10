@@ -32,11 +32,11 @@ const ReviewSchema = new mongoose.Schema({
 const VideoSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Video başlığı zorunludur']
+    required: [true, 'Video başlığı məcburidir']
   },
   videoUrl: {
     type: String,
-    required: [true, 'Video URL zorunludur']
+    required: [true, 'Video URL məcburidir']
   },
   duration: {
     type: String, // e.g. "10:25"
@@ -47,7 +47,7 @@ const VideoSchema = new mongoose.Schema({
 const ModuleSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Modül başlığı zorunludur']
+    required: [true, 'Modul başlığı məcburidir']
   },
   videos: [VideoSchema]
 });
@@ -55,12 +55,12 @@ const ModuleSchema = new mongoose.Schema({
 const CourseSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Kurs başlığı zorunludur'],
+    required: [true, 'Kurs başlığı məcburidir'],
     trim: true
   },
   category: {
     type: String,
-    required: [true, 'Kategori zorunludur']
+    required: [true, 'Kateqoriya məcburidir']
   },
   instructor: {
     type: mongoose.Schema.ObjectId,
@@ -69,16 +69,15 @@ const CourseSchema = new mongoose.Schema({
   },
   image: {
     type: String,
-    default: 'default-course.jpg' // R2 Image URL
+    required: [true, 'Kover şəkli məcburidir']
   },
   description: {
     type: String,
-    required: [true, 'Kurs açıklaması zorunludur']
+    required: [true, 'Kurs açıqlaması məcburidir']
   },
   price: {
     type: Number,
-    required: [true, 'Fiyat bilgisi zorunludur'],
-    default: 0 // 0 ise ücretsiz
+    required: [true, 'Qiymət məlumatı məcburidir']
   },
   hasCertificate: {
     type: Boolean,

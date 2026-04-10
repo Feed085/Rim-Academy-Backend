@@ -20,15 +20,15 @@ const CourseProgressSchema = new mongoose.Schema({
 const StudentSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Ad alanı zorunludur']
+    required: [true, 'Ad sahəsi məcburidir']
   },
   surname: {
     type: String,
-    required: [true, 'Soyad alanı zorunludur']
+    required: [true, 'Soyad sahəsi məcburidir']
   },
   email: {
     type: String,
-    required: [true, 'E-posta alanı zorunludur'],
+    required: [true, 'E-poçt sahəsi məcburidir'],
     unique: true,
     match: [
       /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
@@ -37,13 +37,13 @@ const StudentSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Şifre alanı zorunludur'],
+    required: [true, 'Şifrə sahəsi məcburidir'],
     minlength: 6,
     select: false // Varsayılan olarak sorgularda şifreyi getirme
   },
   phoneNumber: {
     type: String,
-    required: [true, 'Telefon numarası alanı zorunludur']
+    required: [true, 'Telefon nömrəsi sahəsi məcburidir']
   },
   avatar: {
     type: String,

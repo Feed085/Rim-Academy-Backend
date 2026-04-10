@@ -3,13 +3,13 @@ const mongoose = require('mongoose');
 const CategorySchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Kategori adı zorunludur'],
+    required: [true, 'Kateqoriya adı məcburidir'],
     unique: true,
     trim: true
   },
   slug: {
     type: String,
-    required: [true, 'Kategori slug zorunludur'],
+    required: [true, 'Kateqoriya slug-u məcburidir'],
     unique: true,
     trim: true
   },

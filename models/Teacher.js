@@ -34,15 +34,15 @@ const TeacherSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: [true, 'Ad zorunludur']
+    required: [true, 'Ad məcburidir']
   },
   surname: {
     type: String,
-    required: [true, 'Soyad zorunludur']
+    required: [true, 'Soyad məcburidir']
   },
   email: {
     type: String,
-    required: [true, 'Email zorunludur'],
+    required: [true, 'E-poçt məcburidir'],
     unique: true,
     match: [
       /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
@@ -51,7 +51,7 @@ const TeacherSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Şifre zorunludur'],
+    required: [true, 'Şifrə məcburidir'],
     minlength: 6,
     select: false
   },

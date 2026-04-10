@@ -135,6 +135,7 @@ exports.getDashboard = async (req, res) => {
     const now = new Date();
     const currentMonthRange = getMonthRange(now);
     const previousMonthRange = getPreviousMonthRange(now);
+    const activeCourseQuery = { isActive: true };
 
     const [
       totalStudents,
@@ -153,7 +154,7 @@ exports.getDashboard = async (req, res) => {
     ] = await Promise.all([
       Student.countDocuments(),
       Teacher.countDocuments(),
-      Course.countDocuments({ isActive: true, publishDate: { $lte: now } }),
+      Course.countDocuments(activeCourseQuery),
       Student.countDocuments({ createdAt: { $gte: currentMonthRange.start, $lt: currentMonthRange.end } }),
       Student.countDocuments({ createdAt: { $gte: previousMonthRange.start, $lt: previousMonthRange.end } }),
       Teacher.countDocuments({ createdAt: { $gte: currentMonthRange.start, $lt: currentMonthRange.end } }),
@@ -166,7 +167,7 @@ exports.getDashboard = async (req, res) => {
       ]),
       Student.find().sort({ createdAt: -1 }).limit(5),
       Teacher.find().sort({ createdAt: -1 }).limit(5),
-      Course.find({ isActive: true, publishDate: { $lte: now } })
+      Course.find(activeCourseQuery)
         .populate('instructor', 'name surname avatar')
         .sort({ createdAt: -1 })
     ]);
@@ -218,15 +219,6 @@ exports.getDashboard = async (req, res) => {
             trendType: 'up',
             note: `${monthlyCourseGrowth >= 0 ? '+' : ''}${monthlyCourseGrowth}% ay müqayisəsi`
           },
-          {
-            key: 'revenue',
-            label: 'Aylıq Gəlir',
-            value: null,
-            displayValue: 'Hazırlanır',
-            trendLabel: 'Sonra aktivləşəcək',
-            trendType: 'neutral',
-            note: 'Kazanç sistemi tam qurulmayıb'
-          }
         ],
         topCourses: courseSummaries
           .sort((left, right) => right.studentCount - left.studentCount)
@@ -563,7 +555,7 @@ exports.createCategory = async (req, res) => {
     const name = req.body.name || '';
 
     if (!name.trim()) {
-      return res.status(400).json({ success: false, message: 'Kateqoriya adı zorunludur' });
+      return res.status(400).json({ success: false, message: 'Kateqoriya adı məcburidir' });
     }
 
     const slug = req.body.slug || normalizeText(name);
