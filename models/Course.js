@@ -34,6 +34,11 @@ const VideoSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Video başlığı məcburidir']
   },
+  description: {
+    type: String,
+    default: '',
+    trim: true
+  },
   videoUrl: {
     type: String,
     required: [true, 'Video URL məcburidir']
