@@ -1,4 +1,5 @@
 const express = require('express');
+const { protectAdmin } = require('../middleware/adminAuth');
 const {
   getDashboard,
   getTeachers,
@@ -14,6 +15,8 @@ const {
 } = require('../controllers/adminController');
 
 const router = express.Router();
+
+router.use(protectAdmin);
 
 router.get('/dashboard', getDashboard);
 router.get('/teachers', getTeachers);

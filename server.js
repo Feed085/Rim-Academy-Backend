@@ -18,6 +18,7 @@ const courseRoutes = require('./routes/course');
 const uploadRoutes = require('./routes/upload');
 const testRoutes = require('./routes/test');
 const adminRoutes = require('./routes/admin');
+const adminAuthRoutes = require('./routes/adminAuth');
 const categoryRoutes = require('./routes/categories');
 const publicRoutes = require('./routes/public');
 
@@ -28,6 +29,7 @@ app.use('/api/teacher', teacherRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tests', testRoutes);
+app.use('/api/admin/auth', adminAuthRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/public', publicRoutes);
