@@ -1,5 +1,6 @@
 const Student = require('../models/Student');
 const jwt = require('jsonwebtoken');
+const { verifyGoogleCredential } = require('../utils/googleAuth');
 
 // Token oluşturma yardımcı fonksiyonu
 const sendTokenResponse = (student, statusCode, res) => {
@@ -16,7 +17,9 @@ const sendTokenResponse = (student, statusCode, res) => {
       name: student.name,
       surname: student.surname,
       email: student.email,
-      phoneNumber: student.phoneNumber
+      phoneNumber: student.phoneNumber,
+      avatar: student.avatar || '',
+      role: 'student'
     }
   });
 };
@@ -78,5 +81,47 @@ exports.login = async (req, res) => {
     sendTokenResponse(student, 200, res);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Sunucu hatası', error: error.message });
+  }
+};
+
+// @desc    Öğrenci Google Girişi
+// @route   POST /api/student/auth/google
+// @access  Public
+exports.googleLogin = async (req, res) => {
+  try {
+    const { credential } = req.body || {};
+
+    if (!credential) {
+      return res.status(400).json({ success: false, message: 'Google credential tələb olunur' });
+    }
+
+    const payload = await verifyGoogleCredential(credential);
+    const email = (payload?.email || '').trim().toLowerCase();
+
+    if (!email) {
+      return res.status(401).json({ success: false, message: 'Google hesab email-i tapılmadı' });
+    }
+
+    if (!payload?.email_verified) {
+      return res.status(401).json({ success: false, message: 'Google email təsdiqlənməyib' });
+    }
+
+    const student = await Student.findOne({ email });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bu e-poçt ilə qeydiyyatdan keçmiş tələbə tapılmadı. Əvvəlcə hesab yaradın.',
+      });
+    }
+
+    sendTokenResponse(student, 200, res);
+  } catch (error) {
+    console.error('Student Google login failed:', error);
+    const statusCode = error?.statusCode || 401;
+    return res.status(statusCode).json({
+      success: false,
+      message: error?.message || 'Google girişi uğursuz oldu',
+    });
   }
 };
