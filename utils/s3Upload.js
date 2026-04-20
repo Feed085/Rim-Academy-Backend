@@ -3,7 +3,32 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const path = require('path');
 const crypto = require('crypto');
 
-const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
+const normalizeBaseUrl = (value = '') => value.trim().replace(/\/+$/, '');
+
+const splitBaseUrls = (value = '') => value
+  .split(/[\s,]+/)
+  .map(normalizeBaseUrl)
+  .filter(Boolean);
+
+const R2_PUBLIC_URL = normalizeBaseUrl(
+  process.env.R2_PUBLIC_URL || process.env.R2_CUSTOM_DOMAIN || process.env.R2_PUBLIC_DOMAIN
+);
+
+const R2_PUBLIC_URL_ALIASES = new Set([
+  ...splitBaseUrls(process.env.R2_PUBLIC_URL_ALIASES),
+  ...splitBaseUrls(process.env.R2_DEV_PUBLIC_URL),
+  ...splitBaseUrls(process.env.R2_DEV_DOMAIN)
+]);
+
+const isR2Host = (hostname = '') => hostname.endsWith('.r2.dev') || hostname.endsWith('.r2.cloudflarestorage.com');
+
+const getPublicUrl = (fileName) => {
+  if (!R2_PUBLIC_URL) {
+    throw new Error('R2_PUBLIC_URL is not configured');
+  }
+
+  return `${R2_PUBLIC_URL}/${fileName}`;
+};
 
 const s3Client = new S3Client({
   region: 'auto',
@@ -31,7 +56,7 @@ exports.uploadToR2 = async (fileBuffer, originalName, mimeType, folder = 'upload
   await s3Client.send(command);
 
   // Return the full public URL
-  return `${process.env.R2_PUBLIC_URL}/${fileName}`;
+  return getPublicUrl(fileName);
 };
 
 exports.generatePresignedUrl = async (filename, contentType, folder = 'videos') => {
@@ -47,7 +72,7 @@ exports.generatePresignedUrl = async (filename, contentType, folder = 'videos') 
 
   // Pre-signed URL generation (Expiries in 1 hour)
   const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-  const publicUrl = `${process.env.R2_PUBLIC_URL}/${uniqueName}`;
+  const publicUrl = getPublicUrl(uniqueName);
 
   return { signedUrl, publicUrl };
 };
@@ -62,11 +87,38 @@ exports.extractR2KeyFromUrl = (url) => {
     return null;
   }
 
-  if (!R2_PUBLIC_URL || !normalizedUrl.startsWith(R2_PUBLIC_URL)) {
-    return null;
+  const knownBaseUrls = [R2_PUBLIC_URL, ...R2_PUBLIC_URL_ALIASES].filter(Boolean);
+
+  for (const baseUrl of knownBaseUrls) {
+    if (normalizedUrl.startsWith(baseUrl)) {
+      return normalizedUrl.slice(baseUrl.length).replace(/^\/+/, '');
+    }
   }
 
-  return normalizedUrl.slice(R2_PUBLIC_URL.length).replace(/^\/+/, '');
+  try {
+    const parsedUrl = new URL(normalizedUrl);
+    const pathname = parsedUrl.pathname.replace(/^\/+/, '');
+
+    if (!pathname) {
+      return null;
+    }
+
+    if (isR2Host(parsedUrl.hostname)) {
+      const bucketPrefix = `${process.env.R2_BUCKET_NAME || ''}/`;
+
+      if (bucketPrefix !== '/' && pathname.startsWith(bucketPrefix)) {
+        return pathname.slice(bucketPrefix.length);
+      }
+
+      if (pathname === process.env.R2_BUCKET_NAME) {
+        return '';
+      }
+    }
+
+    return pathname;
+  } catch {
+    return null;
+  }
 };
 
 exports.deleteR2ObjectsByUrls = async (urls = []) => {
