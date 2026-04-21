@@ -170,7 +170,7 @@ exports.getTeacherCourses = async (req, res) => {
 exports.getCourse = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id)
-      .populate('instructor', 'name surname avatar experience specializedAreas socialNetworks')
+      .populate('instructor', 'name surname avatar rating experience specializedAreas socialNetworks')
       .populate('reviews.user', 'name surname avatar');
 
     if (!course) {
