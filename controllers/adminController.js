@@ -397,10 +397,14 @@ exports.getStudents = async (req, res) => {
 
 exports.assignStudentItem = async (req, res) => {
   try {
-    const { type, targetId } = req.body;
+    const { type, targetId, action = 'assign' } = req.body;
 
     if (!type || !targetId) {
       return res.status(400).json({ success: false, message: 'type və targetId mütləqdir' });
+    }
+
+    if (!['assign', 'remove'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'action yalnız assign və ya remove ola bilər' });
     }
 
     const student = await Student.findById(req.params.studentId);
@@ -418,21 +422,30 @@ exports.assignStudentItem = async (req, res) => {
 
       const alreadyAssigned = student.activeCourses.some((courseId) => courseId.toString() === targetId);
 
-      if (alreadyAssigned) {
-        return res.status(400).json({ success: false, message: 'Bu kurs artıq tələbəyə verilib' });
-      }
+      if (action === 'assign') {
+        if (alreadyAssigned) {
+          return res.status(400).json({ success: false, message: 'Bu kurs artıq tələbəyə verilib' });
+        }
 
-      student.activeCourses.push(course._id);
+        student.activeCourses.push(course._id);
 
-      student.courseProgress = student.courseProgress || [];
-      const hasProgressEntry = student.courseProgress.some((entry) => entry.course.toString() === course._id.toString());
+        student.courseProgress = student.courseProgress || [];
+        const hasProgressEntry = student.courseProgress.some((entry) => entry.course.toString() === course._id.toString());
 
-      if (!hasProgressEntry) {
-        student.courseProgress.push({
-          course: course._id,
-          completedLessonIds: [],
-          lastAccessed: new Date()
-        });
+        if (!hasProgressEntry) {
+          student.courseProgress.push({
+            course: course._id,
+            completedLessonIds: [],
+            lastAccessed: new Date()
+          });
+        }
+      } else {
+        if (!alreadyAssigned) {
+          return res.status(400).json({ success: false, message: 'Bu kurs tələbəyə təyin edilməyib' });
+        }
+
+        student.activeCourses = student.activeCourses.filter((courseId) => courseId.toString() !== targetId);
+        student.courseProgress = (student.courseProgress || []).filter((entry) => entry.course.toString() !== targetId);
       }
     } else if (type === 'test') {
       const test = await Test.findById(targetId);
@@ -443,12 +456,20 @@ exports.assignStudentItem = async (req, res) => {
 
       const alreadyAssigned = (student.assignedTests || []).some((testId) => testId.toString() === targetId);
 
-      if (alreadyAssigned) {
-        return res.status(400).json({ success: false, message: 'Bu test artıq tələbəyə verilib' });
-      }
+      if (action === 'assign') {
+        if (alreadyAssigned) {
+          return res.status(400).json({ success: false, message: 'Bu test artıq tələbəyə verilib' });
+        }
 
-      student.assignedTests = student.assignedTests || [];
-      student.assignedTests.push(test._id);
+        student.assignedTests = student.assignedTests || [];
+        student.assignedTests.push(test._id);
+      } else {
+        if (!alreadyAssigned) {
+          return res.status(400).json({ success: false, message: 'Bu test tələbəyə təyin edilməyib' });
+        }
+
+        student.assignedTests = (student.assignedTests || []).filter((testId) => testId.toString() !== targetId);
+      }
     } else {
       return res.status(400).json({ success: false, message: 'type yalnız course və ya test ola bilər' });
     }
@@ -473,7 +494,7 @@ exports.assignStudentItem = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Atama tamamlanmadı', error: error.message });
+    res.status(500).json({ success: false, message: 'Təyinat əməliyyatı tamamlanmadı', error: error.message });
   }
 };
 
