@@ -1,6 +1,27 @@
 const Test = require('../models/Test');
 const TestResult = require('../models/TestResult');
 
+const normalizeNumericAnswer = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const parsedValue = Number(String(value).replace(',', '.').trim());
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+};
+
+const isNumericOpenEndedQuestion = (question) => {
+  if (!question || question.answerType !== 'open_ended') {
+    return false;
+  }
+
+  if (question.openEndedAnswerType === 'number') {
+    return true;
+  }
+
+  return normalizeNumericAnswer(question.correctAnswer) !== null;
+};
+
 // @desc    Müəllim üçün yeni test yarat
 // @route   POST /api/tests
 // @access  Private (Teacher)
@@ -19,6 +40,69 @@ exports.createTest = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newTest
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server Hatası', error: error.message });
+  }
+};
+
+// @desc    Müəllim üçün testi yenilə
+// @route   PUT /api/tests/:id
+// @access  Private (Teacher)
+exports.updateTest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, duration, questions } = req.body;
+
+    const test = await Test.findById(id);
+
+    if (!test) {
+      return res.status(404).json({ success: false, message: 'Test tapılmadı' });
+    }
+
+    if (test.instructor.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'İcazə rədd edildi' });
+    }
+
+    test.title = title ?? test.title;
+    test.duration = duration ?? test.duration;
+    if (Array.isArray(questions)) {
+      test.questions = questions;
+    }
+
+    const updatedTest = await test.save();
+
+    res.status(200).json({
+      success: true,
+      data: updatedTest
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server Hatası', error: error.message });
+  }
+};
+
+// @desc    Müəllim üçün testi sil
+// @route   DELETE /api/tests/:id
+// @access  Private (Teacher)
+exports.deleteTest = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const test = await Test.findById(id);
+
+    if (!test) {
+      return res.status(404).json({ success: false, message: 'Test tapılmadı' });
+    }
+
+    if (test.instructor.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'İcazə rədd edildi' });
+    }
+
+    await Test.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Test silindi'
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server Hatası', error: error.message });
@@ -105,9 +189,19 @@ exports.submitTest = async (req, res) => {
             correctCount++;
           }
         } else if (q.answerType === 'open_ended') {
-          status = 'pending';
-          hasPending = true;
-          // Open ended sayılmır başlanğıcda (Müəllim düz xallayanda ümumi bal hesabı dəyişəcək)
+          if (isNumericOpenEndedQuestion(q)) {
+            const studentNumericAnswer = normalizeNumericAnswer(studentAns.answer);
+            const correctNumericAnswer = normalizeNumericAnswer(q.correctAnswer);
+
+            if (studentNumericAnswer !== null && correctNumericAnswer !== null && studentNumericAnswer === correctNumericAnswer) {
+              isCorrect = true;
+              correctCount++;
+            }
+          } else {
+            status = 'pending';
+            hasPending = true;
+            // Open ended text sayılmır başlanğıcda (Müəllim düz xallayanda ümumi bal hesabı dəyişəcək)
+          }
         }
       }
 

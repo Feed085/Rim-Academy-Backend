@@ -15,6 +15,11 @@ const questionSchema = new mongoose.Schema({
     enum: ['multiple_choice', 'open_ended'],
     required: true
   },
+  openEndedAnswerType: {
+    type: String,
+    enum: ['text', 'number'],
+    default: 'text'
+  },
   options: [{
     type: String // A, B, C, D variantları, "açıq tiplidə" boş qalır
   }],
