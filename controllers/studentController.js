@@ -1,5 +1,6 @@
 const Student = require('../models/Student');
 const Course = require('../models/Course');
+const Test = require('../models/Test');
 const TestResult = require('../models/TestResult');
 
 const flattenCourseLessons = (course) => {
@@ -33,13 +34,39 @@ const buildCourseProgressSummary = (course, progressEntry) => {
   };
 };
 
+const toPlainDoc = (doc) => (typeof doc?.toObject === 'function' ? doc.toObject() : doc);
+
+const mergeUniqueTests = (tests = []) => {
+  const seen = new Set();
+
+  return tests.filter((test) => {
+    const id = test?._id?.toString?.() || test?.id?.toString?.();
+
+    if (!id || seen.has(id)) {
+      return false;
+    }
+
+    seen.add(id);
+    return true;
+  });
+};
+
 // @desc    Giriş yapmış öğrencinin kendi profili ve istatistiklerini getir
 // @route   GET /api/student/me
 // @access  Private (Token Gerekli)
 exports.getMe = async (req, res) => {
   try {
     // req.user auth middleware icinden gelir
-    const student = await Student.findById(req.user.id).populate('activeCourses');
+    const student = await Student.findById(req.user.id)
+      .populate('activeCourses')
+      .populate({
+        path: 'assignedTests',
+        select: 'title course instructor duration createdAt',
+        populate: [
+          { path: 'course', select: 'title category image' },
+          { path: 'instructor', select: 'name surname avatar' }
+        ]
+      });
 
     if (!student) {
       return res.status(404).json({ success: false, message: 'Tələbə tapılmadı' });
@@ -58,6 +85,25 @@ exports.getMe = async (req, res) => {
         ...buildCourseProgressSummary(courseData, progressEntry)
       };
     });
+
+    const activeCourseIds = activeCourses.map((course) => course._id);
+    const courseLinkedTests = activeCourseIds.length > 0
+      ? await Test.find({ course: { $in: activeCourseIds } })
+        .populate('course', 'title category image')
+        .populate('instructor', 'name surname avatar')
+      : [];
+
+    const manualTests = (student.assignedTests || []).map(toPlainDoc);
+    const combinedTests = mergeUniqueTests([
+      ...manualTests,
+      ...courseLinkedTests.map(toPlainDoc)
+    ]);
+
+    const normalizedAssignedTests = combinedTests.map((test) => ({
+      ...test,
+      course: test.course ? toPlainDoc(test.course) : null,
+      instructor: test.instructor ? toPlainDoc(test.instructor) : null
+    }));
 
     // Dinamik sınaq nəticələrinə baxaq
     const testResults = await TestResult.countDocuments({ student: student._id });
@@ -79,9 +125,11 @@ exports.getMe = async (req, res) => {
         educationLevel: student.educationLevel,
         completedTests: [], // Artıq sınaqlar TestResult-dan gəlir
         certificates: [],
+        assignedTests: normalizedAssignedTests,
         activeCourses,
         stats: {
           activeCoursesCount: student.activeCourses ? student.activeCourses.length : 0,
+          assignedTestsCount: normalizedAssignedTests.length,
           completedTestsCount: testResults,
           certificatesCount: certificatesCount
         }
