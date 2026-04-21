@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Course = require('../models/Course');
 const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
@@ -401,6 +402,10 @@ exports.assignStudentItem = async (req, res) => {
 
     if (!type || !targetId) {
       return res.status(400).json({ success: false, message: 'type və targetId mütləqdir' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(targetId)) {
+      return res.status(400).json({ success: false, message: 'targetId düzgün deyil' });
     }
 
     if (!['assign', 'remove'].includes(action)) {
