@@ -56,6 +56,98 @@ const parseExperience = (value) => {
   return Number.isFinite(experience) ? experience : 0;
 };
 
+const buildAttemptNumberedResults = (results) => {
+  const attemptCounters = new Map();
+
+  return results.map((result) => {
+    const testId = result.test?._id?.toString?.() || result.test?.toString?.();
+    const attemptNumber = testId ? ((attemptCounters.get(testId) || 0) + 1) : 1;
+
+    if (testId) {
+      attemptCounters.set(testId, attemptNumber);
+    }
+
+    return {
+      id: result._id,
+      test: result.test,
+      student: result.student,
+      answers: result.answers,
+      scorePercentage: result.scorePercentage,
+      hasPendingAnswers: result.hasPendingAnswers,
+      completedAt: result.completedAt,
+      createdAt: result.createdAt,
+      attemptNumber
+    };
+  });
+};
+
+const resolveEntityKey = (value) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value);
+  }
+
+  if (value instanceof mongoose.Types.ObjectId) {
+    return value.toString();
+  }
+
+  if (typeof value === 'object') {
+    if (typeof value.toHexString === 'function') {
+      return value.toHexString();
+    }
+
+    if (value._id !== undefined && value._id !== null) {
+      if (value._id === value) {
+        return value.toString();
+      }
+
+      return resolveEntityKey(value._id);
+    }
+
+    if (value.id !== undefined && value.id !== null) {
+      if (value.id === value) {
+        return value.toString();
+      }
+
+      return resolveEntityKey(value.id);
+    }
+
+    if (typeof value.toString === 'function') {
+      const stringValue = value.toString();
+      if (stringValue !== '[object Object]') {
+        return stringValue;
+      }
+    }
+  }
+
+  return String(value);
+};
+
+const formatSelectedAnswerText = (question, rawAnswer) => {
+  if (rawAnswer === null || rawAnswer === undefined || rawAnswer === '') {
+    return 'Cavab verilməyib';
+  }
+
+  if (question?.answerType === 'multiple_choice') {
+    const answerIndex = Number(String(rawAnswer).trim());
+
+    if (Number.isInteger(answerIndex) && answerIndex >= 0 && Array.isArray(question?.options)) {
+      const optionText = question.options[answerIndex];
+
+      if (optionText) {
+        return `${String.fromCharCode(65 + answerIndex)}: ${optionText}`;
+      }
+
+      return String.fromCharCode(65 + answerIndex);
+    }
+  }
+
+  return String(rawAnswer);
+};
+
 const collectCourseAssetUrls = (course) => {
   const urls = [];
 
@@ -125,6 +217,7 @@ const buildTeacherSummary = async (teacher) => {
     education: teacher.education || '',
     experience: parseExperience(teacher.experience),
     location: teacher.location || '',
+    initialPassword: teacher.initialPassword || '',
     courseCount,
     testCount,
     createdAt: teacher.createdAt
@@ -167,7 +260,7 @@ exports.getDashboard = async (req, res) => {
         { $group: { _id: '$activeCourses', students: { $sum: 1 } } }
       ]),
       Student.find().sort({ createdAt: -1 }).limit(5),
-      Teacher.find().sort({ createdAt: -1 }).limit(5),
+      Teacher.find().select('+initialPassword').sort({ createdAt: -1 }).limit(5),
       Course.find(activeCourseQuery)
         .populate('instructor', 'name surname avatar')
         .sort({ createdAt: -1 })
@@ -273,7 +366,7 @@ exports.getPublicStats = async (req, res) => {
 
 exports.getTeachers = async (req, res) => {
   try {
-    const teachers = await Teacher.find().sort({ createdAt: -1 });
+    const teachers = await Teacher.find().select('+initialPassword').sort({ createdAt: -1 });
     const data = await Promise.all(teachers.map(buildTeacherSummary));
 
     res.status(200).json({ success: true, data });
@@ -298,16 +391,26 @@ exports.updateTeacher = async (req, res) => {
       rating: req.body.rating
     };
 
+    const password = req.body.password;
+
     Object.keys(updateData).forEach((key) => updateData[key] === undefined && delete updateData[key]);
 
-    const teacher = await Teacher.findByIdAndUpdate(req.params.teacherId, updateData, {
-      new: true,
-      runValidators: true
-    });
+    const teacher = await Teacher.findById(req.params.teacherId).select('+password +initialPassword');
 
     if (!teacher) {
       return res.status(404).json({ success: false, message: 'Müəllim tapılmadı' });
     }
+
+    Object.entries(updateData).forEach(([key, value]) => {
+      teacher[key] = value;
+    });
+
+    if (password !== undefined) {
+      teacher.password = password;
+      teacher.initialPassword = password;
+    }
+
+    await teacher.save();
 
     res.status(200).json({ success: true, data: await buildTeacherSummary(teacher) });
   } catch (error) {
@@ -370,7 +473,7 @@ exports.getStudents = async (req, res) => {
   try {
     const students = await Student.find()
       .populate('activeCourses', 'title category instructor isActive')
-      .populate('assignedTests', 'title course instructor duration')
+      .populate('assignedTests', 'title course instructor duration allowRetake')
       .sort({ createdAt: -1 });
 
     const data = students.map((student) => ({
@@ -393,6 +496,59 @@ exports.getStudents = async (req, res) => {
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Tələbələr alınmadı', error: error.message });
+  }
+};
+
+exports.getStudentTestResults = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const student = await Student.findById(studentId)
+      .select('name surname email phoneNumber avatar educationLevel createdAt')
+      .populate('activeCourses', 'title category image')
+      .populate('assignedTests', 'title course instructor duration allowRetake');
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Tələbə tapılmadı' });
+    }
+
+    const results = await TestResult.find({ student: studentId })
+      .populate({
+        path: 'test',
+        select: 'title course duration allowRetake questions createdAt',
+        populate: [
+          { path: 'course', select: 'title category image' },
+          { path: 'instructor', select: 'name surname avatar' }
+        ]
+      })
+      .sort({ createdAt: 1 });
+
+    const resultsWithAttempts = buildAttemptNumberedResults(results).map((result) => ({
+      ...result,
+      test: result.test && typeof result.test.toObject === 'function' ? result.test.toObject() : result.test,
+      student: result.student && typeof result.student.toObject === 'function' ? result.student.toObject() : result.student
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        student: {
+          id: student._id,
+          name: student.name,
+          surname: student.surname,
+          email: student.email,
+          phoneNumber: student.phoneNumber,
+          avatar: student.avatar,
+          educationLevel: student.educationLevel,
+          createdAt: student.createdAt,
+          activeCourses: student.activeCourses || [],
+          assignedTests: student.assignedTests || []
+        },
+        results: resultsWithAttempts
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Tələbə nəticələri alınmadı', error: error.message });
   }
 };
 
@@ -560,6 +716,85 @@ exports.getTests = async (req, res) => {
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Testlər alınmadı', error: error.message });
+  }
+};
+
+exports.getTestResults = async (req, res) => {
+  try {
+    const { testId } = req.params;
+
+    const test = await Test.findById(testId)
+      .populate('course', 'title category image instructor')
+      .populate('instructor', 'name surname avatar');
+
+    if (!test) {
+      return res.status(404).json({ success: false, message: 'Test tapılmadı' });
+    }
+
+    const results = await TestResult.find({ test: testId })
+      .populate('student', 'name surname email phoneNumber avatar educationLevel createdAt')
+      .sort({ createdAt: 1 });
+
+    const normalizedQuestions = (test.questions || []).map((question) => ({
+      ...(question.toObject ? question.toObject() : question),
+      id: resolveEntityKey(question._id || question.id),
+      questionId: resolveEntityKey(question._id || question.id)
+    }));
+
+    const resultsWithAttempts = buildAttemptNumberedResults(results).map((result) => ({
+      constAnswers: result.answers || [],
+      answers: (result.answers || []).map((answer, index) => {
+        const plainAnswer = answer && typeof answer.toObject === 'function' ? answer.toObject() : answer;
+        const rawAnswer = plainAnswer?.answer ?? '';
+        return {
+          ...plainAnswer,
+          questionId: resolveEntityKey(plainAnswer?.questionId),
+          answer: rawAnswer,
+          questionIndex: index,
+          selectedDisplayAnswer: formatSelectedAnswerText(normalizedQuestions[index], rawAnswer)
+        };
+      }),
+      answersByQuestionId: normalizedQuestions.reduce((accumulator, question, index) => {
+        const exactAnswer = (result.answers || []).find((answer) => resolveEntityKey(answer.questionId) === question.questionId);
+        const fallbackAnswer = exactAnswer || result.answers?.[index];
+
+        if (fallbackAnswer) {
+          const plainAnswer = fallbackAnswer && typeof fallbackAnswer.toObject === 'function' ? fallbackAnswer.toObject() : fallbackAnswer;
+          const rawAnswer = plainAnswer?.answer ?? '';
+
+          accumulator[question.questionId] = {
+            ...plainAnswer,
+            questionId: question.questionId,
+            answer: rawAnswer,
+            questionIndex: index,
+            selectedDisplayAnswer: formatSelectedAnswerText(question, rawAnswer)
+          };
+        }
+
+        return accumulator;
+      }, {}),
+      ...result,
+      student: result.student && typeof result.student.toObject === 'function' ? result.student.toObject() : result.student
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        test: {
+          id: test._id,
+          title: test.title,
+          course: test.course && typeof test.course.toObject === 'function' ? test.course.toObject() : test.course,
+          instructor: test.instructor && typeof test.instructor.toObject === 'function' ? test.instructor.toObject() : test.instructor,
+          duration: test.duration,
+          questions: normalizedQuestions,
+          allowRetake: test.allowRetake,
+          createdAt: test.createdAt
+        },
+        results: resultsWithAttempts
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Test nəticələri alınmadı', error: error.message });
   }
 };
 

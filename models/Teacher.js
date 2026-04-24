@@ -55,6 +55,11 @@ const TeacherSchema = new mongoose.Schema({
     minlength: 6,
     select: false
   },
+  initialPassword: {
+    type: String,
+    default: '',
+    select: false
+  },
   phoneNumber: {
     type: String,
     default: ''

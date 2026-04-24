@@ -50,6 +50,7 @@ exports.register = async (req, res) => {
       surname,
       email,
       password,
+      initialPassword: password,
       phoneNumber,
       categories,
       education,
