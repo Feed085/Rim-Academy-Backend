@@ -56,15 +56,21 @@ const parseExperience = (value) => {
   return Number.isFinite(experience) ? experience : 0;
 };
 
+const getAttemptScopeKey = (result) => {
+  const testId = resolveEntityKey(result?.test?._id || result?.test);
+  const studentId = resolveEntityKey(result?.student?._id || result?.student);
+  return `${testId}:${studentId}`;
+};
+
 const buildAttemptNumberedResults = (results) => {
   const attemptCounters = new Map();
 
   return results.map((result) => {
-    const testId = result.test?._id?.toString?.() || result.test?.toString?.();
-    const attemptNumber = testId ? ((attemptCounters.get(testId) || 0) + 1) : 1;
+    const attemptScopeKey = getAttemptScopeKey(result);
+    const attemptNumber = attemptScopeKey ? ((attemptCounters.get(attemptScopeKey) || 0) + 1) : 1;
 
-    if (testId) {
-      attemptCounters.set(testId, attemptNumber);
+    if (attemptScopeKey) {
+      attemptCounters.set(attemptScopeKey, attemptNumber);
     }
 
     return {
