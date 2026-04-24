@@ -22,6 +22,25 @@ const isNumericOpenEndedQuestion = (question) => {
   return normalizeNumericAnswer(question.correctAnswer) !== null;
 };
 
+const normalizeMultipleChoiceAnswer = (value) => {
+  const parsedValue = Number(String(value).trim());
+  return Number.isInteger(parsedValue) && parsedValue >= 0 ? parsedValue : null;
+};
+
+const getMultipleChoiceCorrectAnswerIndex = (question) => {
+  const storedIndex = normalizeMultipleChoiceAnswer(question?.correctAnswer);
+  if (storedIndex !== null) {
+    return storedIndex;
+  }
+
+  if (!question?.options?.length) {
+    return null;
+  }
+
+  const fallbackIndex = question.options.findIndex(option => option === question.correctAnswer);
+  return fallbackIndex >= 0 ? fallbackIndex : null;
+};
+
 // @desc    Müəllim üçün yeni test yarat
 // @route   POST /api/tests
 // @access  Private (Teacher)
@@ -184,7 +203,13 @@ exports.submitTest = async (req, res) => {
 
       if (q) {
         if (q.answerType === 'multiple_choice') {
-          if (q.correctAnswer === studentAns.answer) {
+          const studentAnswerIndex = normalizeMultipleChoiceAnswer(studentAns.answer);
+          const correctAnswerIndex = getMultipleChoiceCorrectAnswerIndex(q);
+
+          if (studentAnswerIndex !== null && correctAnswerIndex !== null && studentAnswerIndex === correctAnswerIndex) {
+            isCorrect = true;
+            correctCount++;
+          } else if (studentAnswerIndex === null && q.correctAnswer === studentAns.answer) {
             isCorrect = true;
             correctCount++;
           }
