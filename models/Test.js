@@ -17,7 +17,7 @@ const questionSchema = new mongoose.Schema({
   },
   openEndedAnswerType: {
     type: String,
-    enum: ['text', 'number'],
+    enum: ['text', 'number', 'selective'],
     default: 'text'
   },
   options: [{

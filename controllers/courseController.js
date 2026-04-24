@@ -70,6 +70,23 @@ const validateCourseModules = (modules) => {
   return null;
 };
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const findCourseByTitle = async (title, excludeCourseId = null) => {
+  if (!title) {
+    return null;
+  }
+
+  const titlePattern = new RegExp(`^${escapeRegExp(title)}$`, 'i');
+  const query = { title: titlePattern };
+
+  if (excludeCourseId) {
+    query._id = { $ne: excludeCourseId };
+  }
+
+  return Course.findOne(query);
+};
+
 // @desc    Yeni kurs yarat
 // @route   POST /api/courses
 // @access  Private (Teacher)
@@ -99,6 +116,11 @@ exports.createCourse = async (req, res) => {
 
     if (!image) {
       return res.status(400).json({ success: false, message: 'Kover şəkli məcburidir' });
+    }
+
+    const existingCourse = await findCourseByTitle(title);
+    if (existingCourse) {
+      return res.status(409).json({ success: false, message: 'Bu adda başqa kurs mövcuddur' });
     }
 
     // 1 günlük cooldown publishDate model tərəfindən default olaraq eklənəcək
@@ -229,6 +251,11 @@ exports.updateCourse = async (req, res) => {
 
     if (!image) {
       return res.status(400).json({ success: false, message: 'Kover şəkli məcburidir' });
+    }
+
+    const existingCourse = await findCourseByTitle(title, course._id);
+    if (existingCourse) {
+      return res.status(409).json({ success: false, message: 'Bu adda başqa kurs mövcuddur' });
     }
 
     const moduleValidationError = validateCourseModules(req.body.modules);
