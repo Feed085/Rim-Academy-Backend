@@ -48,6 +48,10 @@ const testSchema = new mongoose.Schema({
     type: Number, // Məsələn dəqiqə olaraq
     required: true
   },
+  allowRetake: {
+    type: Boolean,
+    default: false
+  },
   questions: [questionSchema],
   createdAt: {
     type: Date,

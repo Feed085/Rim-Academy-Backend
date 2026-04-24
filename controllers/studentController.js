@@ -61,7 +61,7 @@ exports.getMe = async (req, res) => {
       .populate('activeCourses')
       .populate({
         path: 'assignedTests',
-        select: 'title course instructor duration createdAt',
+        select: 'title course instructor duration createdAt allowRetake',
         populate: [
           { path: 'course', select: 'title category image' },
           { path: 'instructor', select: 'name surname avatar' }
@@ -105,6 +105,39 @@ exports.getMe = async (req, res) => {
       instructor: test.instructor ? toPlainDoc(test.instructor) : null
     }));
 
+    const assignedTestIds = normalizedAssignedTests.map((test) => test._id?.toString()).filter(Boolean);
+    const attemptResults = assignedTestIds.length > 0
+      ? await TestResult.find({ student: student._id, test: { $in: assignedTestIds } })
+        .select('test createdAt')
+        .sort({ createdAt: -1 })
+      : [];
+
+    const attemptSummaryMap = new Map();
+    attemptResults.forEach((result) => {
+      const testId = result.test.toString();
+      const existing = attemptSummaryMap.get(testId) || { count: 0, latestCompletedAt: null };
+
+      existing.count += 1;
+      if (!existing.latestCompletedAt) {
+        existing.latestCompletedAt = result.createdAt;
+      }
+
+      attemptSummaryMap.set(testId, existing);
+    });
+
+    const testsWithAttemptState = normalizedAssignedTests.map((test) => {
+      const testId = test._id.toString();
+      const attemptSummary = attemptSummaryMap.get(testId) || { count: 0, latestCompletedAt: null };
+
+      return {
+        ...test,
+        allowRetake: Boolean(test.allowRetake),
+        hasAttempted: attemptSummary.count > 0,
+        attemptCount: attemptSummary.count,
+        latestCompletedAt: attemptSummary.latestCompletedAt
+      };
+    });
+
     // Dinamik sınaq nəticələrinə baxaq
     const testResults = await TestResult.countDocuments({ student: student._id });
     const certificatesCount = await TestResult.countDocuments({ 
@@ -125,11 +158,11 @@ exports.getMe = async (req, res) => {
         educationLevel: student.educationLevel,
         completedTests: [], // Artıq sınaqlar TestResult-dan gəlir
         certificates: [],
-        assignedTests: normalizedAssignedTests,
+        assignedTests: testsWithAttemptState,
         activeCourses,
         stats: {
           activeCoursesCount: student.activeCourses ? student.activeCourses.length : 0,
-          assignedTestsCount: normalizedAssignedTests.length,
+          assignedTestsCount: testsWithAttemptState.length,
           completedTestsCount: testResults,
           certificatesCount: certificatesCount
         }

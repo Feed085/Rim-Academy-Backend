@@ -46,13 +46,14 @@ const getMultipleChoiceCorrectAnswerIndex = (question) => {
 // @access  Private (Teacher)
 exports.createTest = async (req, res) => {
   try {
-    const { title, course, duration, questions } = req.body;
+    const { title, course, duration, allowRetake, questions } = req.body;
 
     const newTest = await Test.create({
       title,
       course,
       instructor: req.user.id,
       duration,
+      allowRetake: allowRetake ?? false,
       questions
     });
 
@@ -71,7 +72,7 @@ exports.createTest = async (req, res) => {
 exports.updateTest = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, duration, questions } = req.body;
+    const { title, duration, allowRetake, questions } = req.body;
 
     const test = await Test.findById(id);
 
@@ -85,6 +86,7 @@ exports.updateTest = async (req, res) => {
 
     test.title = title ?? test.title;
     test.duration = duration ?? test.duration;
+    test.allowRetake = allowRetake ?? test.allowRetake;
     if (Array.isArray(questions)) {
       test.questions = questions;
     }
@@ -189,6 +191,14 @@ exports.submitTest = async (req, res) => {
     const test = await Test.findById(testId);
     if (!test) {
       return res.status(404).json({ success: false, message: 'Test tapılmadı' });
+    }
+
+    const existingResult = await TestResult.findOne({ test: testId, student: req.user.id });
+    if (existingResult && !test.allowRetake) {
+      return res.status(409).json({
+        success: false,
+        message: 'Bu test yalnız bir dəfə yazıla bilər'
+      });
     }
 
     let correctCount = 0;
@@ -312,7 +322,7 @@ exports.getMyTestResults = async (req, res) => {
     const results = await TestResult.find({ student: req.user.id })
        .populate({
          path: 'test',
-         select: 'title course duration',
+         select: 'title course duration allowRetake',
          populate: {
            path: 'course',
            select: 'title instructor',
