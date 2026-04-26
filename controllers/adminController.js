@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Course = require('../models/Course');
+const ContactCourseOption = require('../models/ContactCourseOption');
 const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 const Test = require('../models/Test');
@@ -29,6 +30,14 @@ const formatCategory = (category) => ({
   icon: category.icon,
   order: category.order,
   isActive: category.isActive
+});
+
+const formatContactCourseOption = (option) => ({
+  id: option._id,
+  title: option.title,
+  description: option.description || '',
+  order: option.order || 0,
+  isActive: Boolean(option.isActive)
 });
 
 const getMonthRange = (date) => {
@@ -860,5 +869,66 @@ exports.deleteCategory = async (req, res) => {
     res.status(200).json({ success: true, data: formatCategory(category) });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Kateqoriya silinmədi', error: error.message });
+  }
+};
+
+exports.getContactCourseOptions = async (req, res) => {
+  try {
+    const options = await ContactCourseOption.find({}).sort({ order: 1, createdAt: 1 });
+
+    res.status(200).json({
+      success: true,
+      data: options.map(formatContactCourseOption)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Əlaqə seçimləri alınmadı', error: error.message });
+  }
+};
+
+exports.getPublicContactCourseOptions = async (req, res) => {
+  try {
+    const options = await ContactCourseOption.find({ isActive: true }).sort({ order: 1, createdAt: 1 });
+
+    res.status(200).json({
+      success: true,
+      data: options.map(formatContactCourseOption)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Əlaqə seçimləri alınmadı', error: error.message });
+  }
+};
+
+exports.createContactCourseOption = async (req, res) => {
+  try {
+    const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
+
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Seçim başlığı məcburidir' });
+    }
+
+    const option = await ContactCourseOption.create({
+      title,
+      description: typeof req.body.description === 'string' ? req.body.description.trim() : '',
+      order: Number(req.body.order) || 0,
+      isActive: req.body.isActive !== undefined ? Boolean(req.body.isActive) : true
+    });
+
+    res.status(201).json({ success: true, data: formatContactCourseOption(option) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Seçim yaradılmadı', error: error.message });
+  }
+};
+
+exports.deleteContactCourseOption = async (req, res) => {
+  try {
+    const option = await ContactCourseOption.findByIdAndDelete(req.params.optionId);
+
+    if (!option) {
+      return res.status(404).json({ success: false, message: 'Seçim tapılmadı' });
+    }
+
+    res.status(200).json({ success: true, data: formatContactCourseOption(option) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Seçim silinmədi', error: error.message });
   }
 };

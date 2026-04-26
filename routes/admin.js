@@ -13,7 +13,10 @@ const {
   getTests,
   getCategories,
   createCategory,
-  deleteCategory
+  deleteCategory,
+  getContactCourseOptions,
+  createContactCourseOption,
+  deleteContactCourseOption
 } = require('../controllers/adminController');
 
 const router = express.Router();
@@ -33,5 +36,8 @@ router.get('/tests/:testId/results', getTestResults);
 router.get('/categories', getCategories);
 router.post('/categories', createCategory);
 router.delete('/categories/:categoryId', deleteCategory);
+router.get('/contact-course-options', getContactCourseOptions);
+router.post('/contact-course-options', createContactCourseOption);
+router.delete('/contact-course-options/:optionId', deleteContactCourseOption);
 
 module.exports = router;
